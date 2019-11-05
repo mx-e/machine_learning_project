@@ -1,7 +1,4 @@
-from src.dqn import DQN
-from src.sokoban_env import SokobanEnv
-from src.dqn_optimizer import DqnOptimizer
-from src.training_loop import train_model
+from src import *
 
 import warnings
 warnings.filterwarnings('ignore')

@@ -1,9 +1,6 @@
 import torch
 
-from src.dqn import DQN
-from src.sokoban_env import SokobanEnv
-from src.test_loop import test_model
-from src.store_results_data import store_results_data
+from src import *
 
 import warnings
 warnings.filterwarnings('ignore')

@@ -18,7 +18,6 @@ def store_results_data(results, snapshots):
 
 
 def store_results_plots(results, path):
-
     fig1 = px.line(results, 'episode', 'avg_reward')
     fig1.write_image(f'{path}/fig1.pdf')
 
