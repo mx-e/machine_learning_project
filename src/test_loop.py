@@ -17,7 +17,7 @@ def test_model(episodes, env, policy_net):
             _, reward, done, _ = env.step(action)
             reward_sum += reward
             if done:
-                episode_len_sum += t
+                episode_len_sum += t + 1
                 break
     env.close()
     average_reward = reward_sum / iteration_count

@@ -3,21 +3,17 @@ from src.sokoban_env import SokobanEnv
 from src.dqn_optimizer import DqnOptimizer
 from src.training_loop import train_model
 
-import os
-if not os.path.exists("model"):
-    os.mkdir("model")
-
 import warnings
 warnings.filterwarnings('ignore')
 
 BATCH_SIZE = 128
-GAMMA = 0.50
+GAMMA = 0.90
 EPS_START = 0.99
 EPS_END = 0.05
 EPS_DECAY = 2000
 TARGET_UPDATE = 10
 MEM_SIZE = 25000
-NUM_EPISODES = 10
+NUM_EPISODES = 500
 
 env = SokobanEnv()
 

@@ -1,14 +1,18 @@
 import torch
-from itertools import count
 
 def train_model(optimizer, env, num_episodes = 20, target_update = 10):
+    import os
+    if not os.path.exists("results"):
+        os.mkdir("results")
+
     snapshots = dict()
     for i_episode in range(num_episodes):
         # Initialize the environment and state
         env.reset()
         last_screen = env.get_screen()
         current_screen = env.get_screen()
-        for t in count():
+        done = False
+        while(not done):
             # Select and perform an action
             action = env.select_action(current_screen, optimizer.policy_net)
             _, reward, done, _ = env.step(action)
@@ -24,8 +28,6 @@ def train_model(optimizer, env, num_episodes = 20, target_update = 10):
 
             # Perform one step of the optimization (on the target network)
             optimizer.optimize_model()
-            if done:
-                break
         # Update the target network, copying all weights and biases in DQN
         if i_episode % target_update == 0:
             snapshots[f"model_snapshot_@{i_episode}"] = optimizer.policy_net.state_dict()
@@ -36,4 +38,5 @@ def train_model(optimizer, env, num_episodes = 20, target_update = 10):
     print(f'saved snapshot @ episode {num_episodes}')
 
     print('Complete')
-    torch.save(snapshots, './model/snapshots')
+    torch.save(snapshots, './results/snapshots')
+
