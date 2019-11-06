@@ -10,10 +10,6 @@ from PIL import Image
 class SokobanEnv:
     def __init__(self, env_mode = 'Sokoban-small-v1', eps_end = 0.05, eps_start = 0.95, eps_decay = 20000):
         self.env = gym.make(env_mode)
-
-        self.resize = T.Compose([T.ToPILImage(),
-                        T.Resize(40, interpolation=Image.CUBIC),
-                        T.ToTensor()])
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.action_space = self.env.action_space
         self.eps_start = eps_start
@@ -24,12 +20,12 @@ class SokobanEnv:
     def get_screen(self):
         # Returned screen requested by gym is 400x600x3, but is sometimes larger
         # such as 800x1200x3. Transpose it into torch order (CHW).
-        screen = self.env.render(mode='rgb_array').transpose((2, 0, 1))
+        screen = self.env.render(mode='tiny_rgb_array').transpose((2, 0, 1))[0]
         # Convert to float, rescale, convert to torch tensor
         screen = np.ascontiguousarray(screen, dtype=np.float32) / 255
-        screen = torch.from_numpy(screen)
+        screen = torch.from_numpy(screen).unsqueeze(0)
         # Resize, and add a batch dimension (BCHW)
-        return self.resize(screen).unsqueeze(0).to(self.device)
+        return screen.unsqueeze(0).to(self.device)
 
     def select_action(self, state, net):
         sample = random.random()

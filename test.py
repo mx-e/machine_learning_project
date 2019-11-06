@@ -33,4 +33,5 @@ for snapshot in snapshots:
     print(f"{snapshot}: \nAVG GAME LEN:{average_ep_len}\nAVG_REWARD:{average_reward}")
     performance_data.append(snapshot_performance)
 env.close()
+print(performance_data)
 store_results_data(performance_data, snapshots)
