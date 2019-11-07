@@ -7,27 +7,25 @@ def train_model(optimizer, env, num_episodes = 20, target_update = 10):
 
     snapshots = dict()
     for i_episode in range(num_episodes):
-        # Initialize the environment and state
+
         env.reset()
-        last_screen = env.get_screen()
-        current_screen = env.get_screen()
+        states = []
+        actions =[]
+        rewards = []
+
         done = False
         while(not done):
+            current_screen = env.get_screen()
+            states.append(current_screen)
+
             # Select and perform an action
             action = env.select_action(current_screen, optimizer.policy_net)
+            actions.append(action)
             _, reward, done, _ = env.step(action)
-            reward = torch.tensor([reward], device=env.device)
-            action = torch.tensor([[action]], device=env.device)
-
-            # Observe new state
-            last_screen = current_screen
-            current_screen = env.get_screen()
-
-            # Store the transition in memory
-            optimizer.memory.push(last_screen, action, current_screen, reward)
+            rewards.append(reward)
 
         # Perform one step of the optimization (on the target network)
-        optimizer.optimize_model()
+        optimizer.optimize_model(states, actions, rewards)
         # Update the target network, copying all weights and biases in DQN
         if i_episode % target_update == 0:
             snapshots[f"model_snapshot_@{i_episode}"] = optimizer.policy_net.state_dict()

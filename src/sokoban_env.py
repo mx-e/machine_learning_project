@@ -17,6 +17,10 @@ class SokobanEnv:
         self.eps_decay = eps_decay
         self.steps_done = 0
 
+        self.room_state = self.env.room_state
+        self.box_mapping = self.env.box_mapping
+        self.room_fixed = self.env.room_fixed
+
     def get_screen(self):
         # Returned screen requested by gym is 400x600x3, but is sometimes larger
         # such as 800x1200x3. Transpose it into torch order (CHW).
@@ -37,7 +41,7 @@ class SokobanEnv:
                 # t.max(1) will return largest column value of each row.
                 # second column on max result is index of where max element was
                 # found, so we pick action with the larger expected reward.
-                return net(state).max(1)[1].view(1, 1).item()
+                return net(state)[1].max(1)[1].view(1, 1).item()
         else:
             return self.env.action_space.sample()
 
@@ -45,7 +49,13 @@ class SokobanEnv:
         return self.env.step(action)
 
     def reset(self):
-        self.env.reset()
+        self.env.room_state = self.room_state
+        self.env.room_fixed = self.room_fixed
+        self.env.box_mapping = self.box_mapping
+        self.env.player_position = np.argwhere(self.env.room_state == 5)[0]
+        self.env.num_env_steps = 0
+        self.env.reward_last = 0
+        self.env.boxes_on_target = 0
 
     def close(self):
         self.env.close()

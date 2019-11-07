@@ -14,7 +14,7 @@ _, _, screen_height, screen_width = init_screen.shape
 # Get number of actions from gym action space
 n_actions = env.action_space.n
 
-policy_net = DQN(screen_height, screen_width, n_actions).to(env.device)
+policy_net = NN(screen_height, screen_width, n_actions).to(env.device)
 
 snapshots = torch.load('./results/snapshots')
 performance_data = []

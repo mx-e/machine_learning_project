@@ -13,7 +13,7 @@ def test_model(episodes, env, policy_net):
             iteration_count += 1
             current_screen = env.get_screen()
             # Select and perform an action
-            action = policy_net(current_screen).max(1)[1].view(1, 1).item()
+            action = policy_net(current_screen)[1].max(1)[1].view(1, 1).item()
             _, reward, done, _ = env.step(action)
             reward_sum += reward
             if done:

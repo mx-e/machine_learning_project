@@ -1,5 +1,6 @@
-from .dqn import DQN
-from .dqn_optimizer import DqnOptimizer
+
+from .nn import NN
+from .optimizer import Optimizer
 from .replay_memory import ReplayMemory
 from .sokoban_env import SokobanEnv
 from .test_loop import test_model
