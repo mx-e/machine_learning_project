@@ -19,7 +19,7 @@ os.environ["OMP_NUM_THREADS"] = "1"
 
 UPDATE_GLOBAL_ITER = 10
 GAMMA = 0.9
-MAX_EP = 5000
+MAX_EP = 500000
 
 env = gym.make('Sokoban-small-v1')
 N_S = 49
@@ -78,15 +78,15 @@ class Worker(mp.Process):
         total_step = 1
         while self.g_ep.value < MAX_EP:
             self.env.reset()
-            s = self.env.render('tiny_rgb_array')[:,:,0].flatten()
+            s = self.env.render('tiny_rgb_array')[:,:,0].flatten()/255.0
             buffer_s, buffer_a, buffer_r = [], [], []
             ep_r = 0.
             while True:
                 if self.name == 'w0':
-                    self.env.render('tiny_rgb_array')
+                    self.env.render('tiny_rgb_array')[:, :, 0].flatten()/255.0
                 a = self.lnet.choose_action(v_wrap(s[None, :]))
                 s_, r, done, _ = self.env.step(a)
-                s_ = self.env.render('tiny_rgb_array')[:,:,0].flatten()
+                s_ = self.env.render('tiny_rgb_array')[:,:,0].flatten()/255.0
                 ep_r += r
                 buffer_a.append(a)
                 buffer_s.append(s)
