@@ -48,7 +48,6 @@ class Net(nn.Module):
         self.eval()
         logits, _ = self.forward(s)
         prob = F.softmax(logits, dim=1).data
-        print(prob)
         m = self.distribution(prob)
         return m.sample().numpy()[0]
 
