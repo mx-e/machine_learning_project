@@ -15,10 +15,11 @@ import gym
 import gym_sokoban
 import os
 import numpy as np
+import copy
+
 os.environ["OMP_NUM_THREADS"] = "1"
 
-UPDATE_GLOBAL_ITER = 10
-GAMMA = 0.9
+GAMMA = 0.99
 MAX_EP = 500000
 
 env = gym.make('Sokoban-small-v1')
@@ -78,21 +79,21 @@ class Worker(mp.Process):
         total_step = 1
         while self.g_ep.value < MAX_EP:
             self.env.reset()
-            s = self.env.render('tiny_rgb_array')[:,:,0].flatten()/255.0
+            s = (copy.deepcopy(self.env.room_state).flatten()-3.)/6.
             buffer_s, buffer_a, buffer_r = [], [], []
             ep_r = 0.
             while True:
                 if self.name == 'w0':
-                    self.env.render('tiny_rgb_array')[:, :, 0].flatten()/255.0
+                    (copy.deepcopy(self.env.room_state).flatten()-3)/6.
                 a = self.lnet.choose_action(v_wrap(s[None, :]))
                 s_, r, done, _ = self.env.step(a)
-                s_ = self.env.render('tiny_rgb_array')[:,:,0].flatten()/255.0
+                s_ = (copy.deepcopy(self.env.room_state).flatten()-3)/6.
                 ep_r += r
                 buffer_a.append(a)
                 buffer_s.append(s)
                 buffer_r.append(r)
 
-                if total_step % UPDATE_GLOBAL_ITER == 0 or done:  # update global and assign to local net
+                if done:  # update global and assign to local net
                     # sync
                     push_and_pull(self.opt, self.lnet, self.gnet, done, s_, buffer_s, buffer_a, buffer_r, GAMMA)
                     #print(buffer_a)
@@ -109,7 +110,7 @@ class Worker(mp.Process):
 if __name__ == "__main__":
     gnet = Net(N_S, N_A)        # global network
     gnet.share_memory()         # share the global parameters in multiprocessing
-    opt = SharedAdam(gnet.parameters(), lr=0.0001)      # global optimizer
+    opt = SharedAdam(gnet.parameters(), lr=0.001)      # global optimizer
     global_ep, global_ep_r, res_queue = mp.Value('i', 0), mp.Value('d', 0.), mp.Queue()
 
     # parallel training
