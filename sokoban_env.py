@@ -12,7 +12,7 @@ class SokobanEnv:
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.steps_done = 0
         self.action_space = self.env.action_space
-        self.image_space = self.get_screen().shape
+        self.observation_space = self.get_screen()
 
     def get_screen(self):
         no_actions = self.action_space.n
@@ -26,12 +26,14 @@ class SokobanEnv:
         self.steps_done += 1
         s_, r, done, _ =  self.env.step(action)
         if(r > 0):
-            self.steps_done = 0
+            None
+            #self.steps_done = 0
         if(done == True and r < 1):
             r = -1
         if(self.steps_done > 100):
-            done = True
-            r = -4
+            None
+            #done = True
+            #r = -4
         return self.get_screen(), r, done, _
 
     def reset(self):

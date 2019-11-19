@@ -8,7 +8,7 @@ from net import Net
 from sokoban_env import SokobanEnv
 
 class AsyncTrainingWorker(mp.Process):
-    def __init__(self, gnet, opt, global_ep, global_ep_r, res_queue, name, input_dim, output_dim, gamma, max_ep, sokoban, env):
+    def __init__(self, gnet, opt, global_ep, global_ep_r, res_queue, name, input_dim, output_dim, gamma, max_ep, sokoban, env, update_global):
         super(AsyncTrainingWorker, self).__init__()
         self.name = 'w%i' % name
         self.g_ep, self.g_ep_r, self.res_queue = global_ep, global_ep_r, res_queue
@@ -20,6 +20,7 @@ class AsyncTrainingWorker(mp.Process):
             self.env = gym.make(env).unwrapped
         self.gamma = gamma
         self.max_ep = max_ep
+        self.update_global = update_global
 
     def run(self):
         total_step = 1
@@ -37,7 +38,7 @@ class AsyncTrainingWorker(mp.Process):
                 buffer_s.append(s)
                 buffer_r.append(r)
 
-                if done:  # update global and assign to local net
+                if total_step % self.update_global == 0 or done:  # update global and assign to local net
                     # sync
                     push_and_pull(self.opt, self.lnet, self.gnet, done, s_, buffer_s, buffer_a, buffer_r, self.gamma)
                     buffer_s, buffer_a, buffer_r = [], [], []
@@ -48,5 +49,4 @@ class AsyncTrainingWorker(mp.Process):
                 s = s_
                 total_step += 1
         self.res_queue.put(None)
-        total_step = 1
         
