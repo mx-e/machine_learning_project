@@ -8,6 +8,7 @@ from PIL import Image
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.multiprocessing as mp
+import gym_sokoban
 
 os.environ['OMP_NUM_THREADS'] = '1'
 
@@ -118,7 +119,7 @@ def train(shared_model, shared_optimizer, rank, args, info):
     start_time = last_disp_time = time.time()
     episode_length, epr, eploss, done = 0, 0, 0, True  # bookkeeping
 
-    while info['frames'][0] <= 8e7 or args.test:  # openai baselines uses 40M frames...we'll use 80M
+    while info['frames'][0] <= 5e7 or args.test:  # openai baselines uses 40M frames...we'll use 80M
         model.load_state_dict(shared_model.state_dict())  # sync with shared model
 
         hx = torch.zeros(1, 256) if done else hx.detach()  # rnn activation vector
