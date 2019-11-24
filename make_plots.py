@@ -22,7 +22,7 @@ def generate_plot(results_dir):
             no_frames.append(float(entry[2].split(' ')[2].strip('M')) * 1e6)
     fig = go.Figure(data=go.Scatter(x=no_frames, y=ep_reward))
     fig.update_layout(
-        title = f'{results_dir.strip("/.")}',
+        #title = f'{results_dir.strip("/.")}',
         xaxis_title = 'no. of frames trained on',
         yaxis_title = 'avg. episode reward'
         )
