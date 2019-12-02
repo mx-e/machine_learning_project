@@ -1,6 +1,7 @@
 # Baby Advantage Actor-Critic | Sam Greydanus | October 2017 | MIT License
 
 from __future__ import print_function
+from sokoban_env import SokobanEnv
 import torch, os, gym, time, glob, argparse, sys
 import numpy as np
 from scipy.signal import lfilter
@@ -16,7 +17,7 @@ os.environ['OMP_NUM_THREADS'] = '1'
 def get_args():
     parser = argparse.ArgumentParser(description=None)
     parser.add_argument('--env', default='Breakout-v4', type=str, help='gym environment')
-    parser.add_argument('--processes', default=20, type=int, help='number of processes to train with')
+    parser.add_argument('--processes', default=16, type=int, help='number of processes to train with')
     parser.add_argument('--render', default=False, type=bool, help='renders the atari environment')
     parser.add_argument('--test', default=False, type=bool, help='sets lr=0, chooses most likely actions')
     parser.add_argument('--rnn_steps', default=20, type=int, help='steps to train LSTM over')
@@ -43,20 +44,20 @@ def printlog(args, s, end='\n', mode='a'):
 class NNPolicy(nn.Module):  # an actor-critic neural network
     def __init__(self, channels, memsize, num_actions):
         super(NNPolicy, self).__init__()
-        self.conv1 = nn.Conv2d(channels, 32, 3, stride=2, padding=1)
-        self.conv2 = nn.Conv2d(32, 32, 3, stride=2, padding=1)
-        self.conv3 = nn.Conv2d(32, 32, 3, stride=2, padding=1)
-        self.conv4 = nn.Conv2d(32, 32, 3, stride=2, padding=1)
-        self.gru = nn.GRUCell(32 * 5 * 5, memsize)
+        self.conv1 = nn.Conv2d(channels, 32, 3, stride=2, padding=0)
+        #self.conv2 = nn.Conv2d(32, 32, 3, stride=2, padding=1)
+        #self.conv3 = nn.Conv2d(32, 32, 3, stride=2, padding=1)
+        #self.conv4 = nn.Conv2d(32, 32, 3, stride=2, padding=1)
+        self.gru = nn.GRUCell(288, memsize)
         self.critic_linear, self.actor_linear = nn.Linear(memsize, 1), nn.Linear(memsize, num_actions)
 
     def forward(self, inputs, train=True, hard=False):
         inputs, hx = inputs
         x = F.elu(self.conv1(inputs))
-        x = F.elu(self.conv2(x))
-        x = F.elu(self.conv3(x))
-        x = F.elu(self.conv4(x))
-        hx = self.gru(x.view(-1, 32 * 5 * 5), (hx))
+        #x = F.elu(self.conv2(x))
+        #x = F.elu(self.conv3(x))
+        #x = F.elu(self.conv4(x))
+        hx = self.gru(x.view(-1, 288), (hx))
         return self.critic_linear(hx), self.actor_linear(hx), hx
 
     def try_load(self, save_dir):
@@ -95,6 +96,8 @@ def cost_func(args, values, logps, actions, rewards):
 
     # generalized advantage estimation using \delta_t residuals (a policy gradient method)
     delta_t = np.asarray(rewards) + args.gamma * np_values[1:] - np_values[:-1]
+    #print(actions.clone().detach().view(-1, 1))
+    #print(logps)
     logpys = logps.gather(1, actions.clone().detach().view(-1, 1))
     gen_adv_est = discount(delta_t, args.gamma * args.tau)
     policy_loss = -(logpys.view(-1) * torch.FloatTensor(gen_adv_est.copy())).sum()
@@ -110,11 +113,11 @@ def cost_func(args, values, logps, actions, rewards):
 
 
 def train(shared_model, shared_optimizer, rank, args, info):
-    env = gym.make(args.env)  # make a local (unshared) environment
-    env.seed(args.seed + rank);
+    env = SokobanEnv()  # make a local (unshared) environment
+    env.seed();
     torch.manual_seed(args.seed + rank)  # seed everything
     model = NNPolicy(channels=1, memsize=args.hidden, num_actions=args.num_actions)  # a local/unshared model
-    state = torch.tensor(prepro(env.reset()))  # get first state
+    state = env.reset() # get first state
 
     start_time = last_disp_time = time.time()
     episode_length, epr, eploss, done = 0, 0, 0, True  # bookkeeping
@@ -127,14 +130,16 @@ def train(shared_model, shared_optimizer, rank, args, info):
 
         for step in range(args.rnn_steps):
             episode_length += 1
-            value, logit, hx = model((state.view(1, 1, 80, 80), hx))
+            #value, logit, hx = model((state.view(7,7), hx))
+            #print(state.view(7, 7))
+            value, logit, hx = model((state.view(1,1,7,7), hx))
             logp = F.log_softmax(logit, dim=-1)
 
             action = torch.exp(logp).multinomial(num_samples=1).data[0]  # logp.max(1)[1].data if args.test else
             state, reward, done, _ = env.step(action.numpy()[0])
             if args.render: env.render()
 
-            state = torch.tensor(prepro(state));
+            #state = torch.tensor(state);
             epr += reward
             reward = np.clip(reward, -1, 1)  # reward
             done = done or episode_length >= 1e4  # don't playing one ep for too long
@@ -160,14 +165,14 @@ def train(shared_model, shared_optimizer, rank, args, info):
 
             if done:  # maybe print info.
                 episode_length, epr, eploss = 0, 0, 0
-                state = torch.tensor(prepro(env.reset()))
+                state = env.reset()
 
             values.append(value);
             logps.append(logp);
             actions.append(action);
             rewards.append(reward)
 
-        next_value = torch.zeros(1, 1) if done else model((state.unsqueeze(0), hx))[0]
+        next_value = torch.zeros(1, 1) if done else model((state.view(1,1,7,7), hx))[0]
         values.append(next_value.detach())
 
         loss = cost_func(args, torch.cat(values), torch.cat(logps), torch.cat(actions), np.asarray(rewards))
