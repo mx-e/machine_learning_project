@@ -16,8 +16,8 @@ os.environ['OMP_NUM_THREADS'] = '1'
 
 def get_args():
     parser = argparse.ArgumentParser(description=None)
-    parser.add_argument('--env', default='Breakout-v4', type=str, help='gym environment')
-    parser.add_argument('--processes', default=16, type=int, help='number of processes to train with')
+    parser.add_argument('--env', default='Breakout-ram-v4', type=str, help='gym environment')
+    parser.add_argument('--processes', default=8, type=int, help='number of processes to train with')
     parser.add_argument('--render', default=False, type=bool, help='renders the atari environment')
     parser.add_argument('--test', default=False, type=bool, help='sets lr=0, chooses most likely actions')
     parser.add_argument('--rnn_steps', default=20, type=int, help='steps to train LSTM over')
@@ -31,7 +31,7 @@ def get_args():
 
 
 discount = lambda x, gamma: lfilter([1], [1, -gamma], x[::-1])[::-1]  # discounted rewards one liner
-prepro = lambda img: np.array(Image.fromarray(img[35:195].mean(2)).resize((80, 80))).astype(np.float32).reshape(1, 80, 80) / 255.
+prepro = lambda state: torch.tensor((state.astype(np.float32)/255)).unsqueeze(0)
 
 
 def printlog(args, s, end='\n', mode='a'):
@@ -42,22 +42,16 @@ def printlog(args, s, end='\n', mode='a'):
 
 
 class NNPolicy(nn.Module):  # an actor-critic neural network
-    def __init__(self, channels, memsize, num_actions):
+    def __init__(self, input_size, memsize, num_actions):
         super(NNPolicy, self).__init__()
-        self.conv1 = nn.Conv2d(channels, 32, 3, stride=2, padding=0)
-        #self.conv2 = nn.Conv2d(32, 32, 3, stride=2, padding=1)
-        #self.conv3 = nn.Conv2d(32, 32, 3, stride=2, padding=1)
-        #self.conv4 = nn.Conv2d(32, 32, 3, stride=2, padding=1)
-        self.gru = nn.GRUCell(288, memsize)
+        self.linear1 = nn.Linear(input_size, 256)
+        self.gru = nn.GRUCell(256, memsize)
         self.critic_linear, self.actor_linear = nn.Linear(memsize, 1), nn.Linear(memsize, num_actions)
 
     def forward(self, inputs, train=True, hard=False):
         inputs, hx = inputs
-        x = F.elu(self.conv1(inputs))
-        #x = F.elu(self.conv2(x))
-        #x = F.elu(self.conv3(x))
-        #x = F.elu(self.conv4(x))
-        hx = self.gru(x.view(-1, 288), (hx))
+        x = F.relu6(self.linear1(inputs))
+        hx = self.gru(x, (hx))
         return self.critic_linear(hx), self.actor_linear(hx), hx
 
     def try_load(self, save_dir):
@@ -113,10 +107,13 @@ def cost_func(args, values, logps, actions, rewards):
 
 
 def train(shared_model, shared_optimizer, rank, args, info):
-    env = SokobanEnv()  # make a local (unshared) environment
+    if(args.sokoban):
+        env = SokobanEnv()  # make a local (unshared) environment
+    else: 
+        env = gym.make(args.env)
     env.seed();
     torch.manual_seed(args.seed + rank)  # seed everything
-    model = NNPolicy(channels=1, memsize=args.hidden, num_actions=args.num_actions)  # a local/unshared model
+    model = NNPolicy(input_size=args.input_size, memsize=args.hidden, num_actions=args.num_actions)  # a local/unshared model
     state = env.reset() # get first state
 
     start_time = last_disp_time = time.time()
@@ -130,9 +127,7 @@ def train(shared_model, shared_optimizer, rank, args, info):
 
         for step in range(args.rnn_steps):
             episode_length += 1
-            #value, logit, hx = model((state.view(7,7), hx))
-            #print(state.view(7, 7))
-            value, logit, hx = model((state.view(1,1,7,7), hx))
+            value, logit, hx = model((prepro(state), hx))
             logp = F.log_softmax(logit, dim=-1)
 
             action = torch.exp(logp).multinomial(num_samples=1).data[0]  # logp.max(1)[1].data if args.test else
@@ -172,7 +167,7 @@ def train(shared_model, shared_optimizer, rank, args, info):
             actions.append(action);
             rewards.append(reward)
 
-        next_value = torch.zeros(1, 1) if done else model((state.view(1,1,7,7), hx))[0]
+        next_value = torch.zeros(1, 1) if done else model((prepro(state), hx))[0]
         values.append(next_value.detach())
 
         loss = cost_func(args, torch.cat(values), torch.cat(logps), torch.cat(actions), np.asarray(rewards))
@@ -196,11 +191,18 @@ if __name__ == "__main__":
     args.save_dir = '{}/'.format(args.env.lower())  # keep the directory structure simple
     if args.render:  args.processes = 1; args.test = True  # render mode -> test mode w one process
     if args.test:  args.lr = 0  # don't train in render mode
-    args.num_actions = gym.make(args.env).action_space.n  # get the action space of this game
+    if(args.env == 'Sokoban-small-v1'): 
+        args.sokoban = True
+        None
+    else:
+        args.num_actions = gym.make(args.env).action_space.n  # get the action space of this game
+        args.input_size = gym.make(args.env).reset().size
+        args.sokoban = False
+
     os.makedirs(args.save_dir) if not os.path.exists(args.save_dir) else None  # make dir to save models etc.
 
     torch.manual_seed(args.seed)
-    shared_model = NNPolicy(channels=1, memsize=args.hidden, num_actions=args.num_actions).share_memory()
+    shared_model = NNPolicy(input_size=args.input_size, memsize=args.hidden, num_actions=args.num_actions).share_memory()
     shared_optimizer = SharedAdam(shared_model.parameters(), lr=args.lr)
 
     info = {k: torch.DoubleTensor([0]).share_memory_() for k in ['run_epr', 'run_loss', 'episodes', 'frames']}
