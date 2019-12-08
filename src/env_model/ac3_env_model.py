@@ -1,8 +1,7 @@
 # Baby Advantage Actor-Critic | Sam Greydanus | October 2017 | MIT License
 
 from __future__ import print_function
-from sokoban_env import SokobanEnv
-import torch, os, gym, time, glob, argparse, sys
+import torch, os, gym, time, glob, argparse, sys, random
 import numpy as np
 from scipy.signal import lfilter
 from PIL import Image
@@ -20,8 +19,8 @@ def get_args():
     parser.add_argument('--processes', default=8, type=int, help='number of processes to train with')
     parser.add_argument('--render', default=False, type=bool, help='renders the atari environment')
     parser.add_argument('--test', default=False, type=bool, help='sets lr=0, chooses most likely actions')
-    parser.add_argument('--rnn_steps', default=100, type=int, help='steps to train LSTM over')
-    parser.add_argument('--lr', default=2e-4, type=float, help='learning rate')
+    parser.add_argument('--rnn_steps', default=10, type=int, help='steps to train LSTM over')
+    parser.add_argument('--lr', default=1e-3, type=float, help='learning rate')
     parser.add_argument('--seed', default=1, type=int, help='seed random # generators (for reproducibility)')
     parser.add_argument('--gamma', default=0.99, type=float, help='rewards discount factor')
     parser.add_argument('--tau', default=1.0, type=float, help='generalized advantage estimation discount')
@@ -44,17 +43,26 @@ def printlog(args, s, end='\n', mode='a'):
 class NNPolicy(nn.Module):  # an actor-critic neural network
     def __init__(self, input_size, memsize, num_actions):
         super(NNPolicy, self).__init__()
-        self.linear1 = nn.Linear(input_size, 256)
-        self.linear2 = nn.Linear(256,256)
-        self.gru = nn.GRUCell(256, memsize)
-        self.critic_linear, self.actor_linear = nn.Linear(memsize, 1), nn.Linear(memsize, num_actions)
+        self.action_space = num_actions
+        self.input_size = input_size
+        self.conv1 = torch.nn.Conv1d(in_channels=self.action_space + 1, out_channels=32, kernel_size=3, padding=1)
+        self.conv2 = torch.nn.Conv1d(in_channels=32, out_channels=32, kernel_size=3, padding=1)
+        self.deconf1 = torch.nn.Conv1d(in_channels=32, out_channels=1, kernel_size=3, padding=1)
+
 
     def forward(self, inputs, train=True, hard=False):
-        inputs, hx = inputs
-        x = F.elu(self.linear1(inputs))
-        x = F.elu(self.linear2(x))
-        hx = self.gru(x, (hx))
-        return self.critic_linear(hx), self.actor_linear(hx), hx
+        state, action = inputs
+        one_hot_action_encoding = np.zeros(self.action_space)
+        one_hot_action_encoding[action] = 1
+        one_hot_action_encoding = one_hot_action_encoding.reshape(4,1)
+        one_hot_action_encoding = np.tile(one_hot_action_encoding,(self.input_size)).astype(np.float32)
+
+        model_input = torch.cat([state, torch.tensor(one_hot_action_encoding)]).unsqueeze(0)
+        x = F.relu(self.conv1(model_input))
+        x = F.relu(self.conv2(x))
+        predicted_state = self.deconf1(x)
+
+        return predicted_state, torch.tensor(action).unsqueeze(0)
 
     def try_load(self, save_dir):
         paths = glob.glob(save_dir + '*.tar');
@@ -87,26 +95,8 @@ class SharedAdam(torch.optim.Adam):  # extend a pytorch optimizer so it shares g
             super.step(closure)
 
 
-def cost_func(args, values, logps, actions, rewards):
-    np_values = values.view(-1).data.numpy()
-
-    # generalized advantage estimation using \delta_t residuals (a policy gradient method)
-    delta_t = np.asarray(rewards) + args.gamma * np_values[1:] - np_values[:-1]
-    #print(actions.clone().detach().view(-1, 1))
-    #print(logps)
-    logpys = logps.gather(1, actions.clone().detach().view(-1, 1))
-    gen_adv_est = discount(delta_t, args.gamma * args.tau)
-    policy_loss = -(logpys.view(-1) * torch.FloatTensor(gen_adv_est.copy())).sum()
-
-    # l2 loss over value estimator
-    rewards[-1] += args.gamma * np_values[-1]
-    discounted_r = discount(np.asarray(rewards), args.gamma)
-    discounted_r = torch.tensor(discounted_r.copy(), dtype=torch.float32)
-    value_loss = .5 * (discounted_r - values[:-1, 0]).pow(2).sum()
-
-    entropy_loss = (-logps * torch.exp(logps)).sum()  # entropy definition, for entropy regularization
-    return policy_loss + 0.5 * value_loss - 0.01 * entropy_loss
-
+def cost_func(args, states, predicted_states, rewards, predicted_rewards):
+    return (states-predicted_states).pow(2).sum()
 
 def train(shared_model, shared_optimizer, rank, args, info):
     if(args.sokoban):
@@ -121,28 +111,25 @@ def train(shared_model, shared_optimizer, rank, args, info):
     start_time = last_disp_time = time.time()
     episode_length, epr, eploss, done = 0, 0, 0, True  # bookkeeping
 
-    while info['frames'][0] <= 5e7 or args.test:  # openai baselines uses 40M frames...we'll use 80M
+    while info['frames'][0] <= 1e8 or args.test:  # openai baselines uses 40M frames...we'll use 80M
         model.load_state_dict(shared_model.state_dict())  # sync with shared model
-
-        hx = torch.zeros(1, 256) if done else hx.detach()  # rnn activation vector
-        values, logps, actions, rewards = [], [], [], []  # save values for computing gradientss
+        states, predicted_states, rewards, predicted_rewards = [], [], [], []  # save values for computing gradients
 
         for step in range(args.rnn_steps):
             episode_length += 1
-            value, logit, hx = model((prepro(state), hx))
-            logp = F.log_softmax(logit, dim=-1)
-
-            action = torch.exp(logp).multinomial(num_samples=1).data[0]  # logp.max(1)[1].data if args.test else
-            state, reward, done, _ = env.step(action.numpy()[0])
+            action = random.sample(range(args.num_actions), 1)[0]
+            predicted_state, predicted_reward = model((prepro(state), action))
+    
+            state, reward, done, _ = env.step(action)
             if args.render: env.render()
 
-            #state = torch.tensor(state);
             epr += reward
-            reward = np.clip(reward, -1, 10)  # reward
+            reward = torch.tensor(reward).unsqueeze(0)
             done = done or episode_length >= 1e4  # don't playing one ep for too long
 
             info['frames'].add_(1);
             num_frames = int(info['frames'].item())
+
             if num_frames % 2e6 == 0:  # save every 2M frames
                 printlog(args, '\n\t{:.0f}M frames: saved model\n'.format(num_frames / 1e6))
                 torch.save(shared_model.state_dict(), args.save_dir + 'model.{:.0f}.tar'.format(num_frames / 1e6))
@@ -150,33 +137,27 @@ def train(shared_model, shared_optimizer, rank, args, info):
             if done:  # update shared data
                 info['episodes'] += 1
                 interp = 1 if info['episodes'][0] == 1 else 1 - args.horizon
-                info['run_epr'].mul_(1 - interp).add_(interp * epr)
                 info['run_loss'].mul_(1 - interp).add_(interp * eploss)
 
             if rank == 0 and time.time() - last_disp_time > 60:  # print info ~ every minute
                 elapsed = time.strftime("%Hh %Mm %Ss", time.gmtime(time.time() - start_time))
-                printlog(args, 'time {}, episodes {:.0f}, frames {:.1f}M, mean epr {:.2f}, run loss {:.2f}'
-                         .format(elapsed, info['episodes'].item(), num_frames / 1e6,
-                                 info['run_epr'].item(), info['run_loss'].item()))
+                printlog(args, 'time {}, episodes {:.0f}, frames {:.1f}M, run loss {:.2f}'
+                         .format(elapsed, info['episodes'].item(), num_frames / 1e6, info['run_loss'].item()))
                 last_disp_time = time.time()
 
             if done:  # maybe print info.
                 episode_length, epr, eploss = 0, 0, 0
                 state = env.reset()
 
-            values.append(value);
-            logps.append(logp);
-            actions.append(action);
+            states.append(prepro(state))
+            predicted_states.append(predicted_state)
             rewards.append(reward)
+            predicted_rewards.append(predicted_reward)
 
-        next_value = torch.zeros(1, 1) if done else model((prepro(state), hx))[0]
-        values.append(next_value.detach())
-
-        loss = cost_func(args, torch.cat(values), torch.cat(logps), torch.cat(actions), np.asarray(rewards))
+        loss = cost_func(args, torch.cat(states), torch.cat(predicted_states), torch.cat(rewards), np.asarray(predicted_rewards))
         eploss += loss.item()
         shared_optimizer.zero_grad();
         loss.backward()
-        torch.nn.utils.clip_grad_norm_(model.parameters(), 40)
 
         for param, shared_param in zip(model.parameters(), shared_model.parameters()):
             if shared_param.grad is None: shared_param._grad = param.grad  # sync gradients with shared model
@@ -190,7 +171,7 @@ if __name__ == "__main__":
         raise "Must be using Python 3 with linux!"  # or else you get a deadlock in conv2d
 
     args = get_args()
-    args.save_dir = '{}/'.format(args.env.lower())  # keep the directory structure simple
+    args.save_dir = 'envs/{}/'.format(args.env.lower())  # keep the directory structure simple
     if args.render:  args.processes = 1; args.test = True  # render mode -> test mode w one process
     if args.test:  args.lr = 0  # don't train in render mode
     if(args.env == 'Sokoban-small-v1'): 
