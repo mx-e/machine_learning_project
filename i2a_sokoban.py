@@ -96,7 +96,7 @@ def train(shared_modules, shared_optim, rank, args, info):
 
         values, logps, actions, rewards = [], [], [], []  # save values for computing gradientss
 
-        for step in range(args.rnn_steps):
+        while(True):
             episode_length += 1
             logits, value = model_pipeline.pipe(state.unsqueeze(0))
             logp = F.log_softmax(logits, dim=-1)
@@ -130,6 +130,7 @@ def train(shared_modules, shared_optim, rank, args, info):
             if done:  # maybe print info.
                 episode_length, epr, eploss = 0, 0, 0
                 state = env.reset()
+                break
 
             values.append(value);
             logps.append(logp);
