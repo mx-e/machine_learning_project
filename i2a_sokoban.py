@@ -1,4 +1,7 @@
-# Baby Advantage Actor-Critic | Sam Greydanus | October 2017 | MIT License
+#!/usr/bin/env python3
+#$ -V
+#$ -cwd
+#$ -pe OpenMP 20
 
 from __future__ import print_function
 import torch, os, gym, time, sys
