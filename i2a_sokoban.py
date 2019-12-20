@@ -71,7 +71,7 @@ class I2A_PipeLine:
         return (logits, value)
 
 
-def train(shared_modules, shared_optims, rank, args, info):
+def train(shared_modules, shared_optim, rank, args, info):
     env = SokobanEnv()  # make a local (unshared) environment
     env.seed()
     torch.manual_seed(args.seed + rank)  # seed everything
@@ -141,8 +141,7 @@ def train(shared_modules, shared_optims, rank, args, info):
 
         loss = cost_func(args, torch.cat(values), torch.cat(logps), torch.cat(actions), np.asarray(rewards))
         eploss += loss.item()
-        for optim in shared_optims.values():
-            optim.zero_grad()
+        shared_optim.zero_grad()
         loss.backward()
         for module in modules.values():
             torch.nn.utils.clip_grad_norm_(module.parameters(), 40)
@@ -150,8 +149,7 @@ def train(shared_modules, shared_optims, rank, args, info):
         for module, shared_module in zip(modules.values(), shared_modules.values()):
             for param, shared_param in zip(module.parameters(), shared_module.parameters()):
                 if shared_param.grad is None: shared_param._grad = param.grad  # sync gradients with shared model
-        for shared_optim in shared_optims.values():
-            shared_optim.step()
+        shared_optim.step()
 
 
 if __name__ == "__main__":
@@ -159,7 +157,7 @@ if __name__ == "__main__":
         mp.set_start_method('spawn')  # this must not be in global scope
 
     args = get_args()
-    args.save_dir = f'{args.save_dir}/{args.env.lower()}'  # keep the directory structure simple
+    args.save_dir = f'{args.save_dir}/{args.env.lower()}/'  # keep the directory structure simple
     if args.render:  args.processes = 1; args.test = True  # render mode -> test mode w one process
     if args.test:  args.lr = 0  # don't train in render mode
     env = SokobanEnv()
@@ -182,19 +180,18 @@ if __name__ == "__main__":
         'rollout_lstm': Rollout_LSTM_Module(input_size = args.rollout_lstm_input_size, is_sokoban=True).share_memory()
     }
 
-    shared_optims = {
-        'rollout_conv': SharedAdam(shared_modules['rollout_conv'].parameters(), lr=args.lr),
-        'model_free_conv': SharedAdam(shared_modules['model_free_conv'].parameters(), lr=args.lr),
-        'linear_output': SharedAdam(shared_modules['linear_output'].parameters(), lr=args.lr),
-        'rollout_lstm': SharedAdam(shared_modules['rollout_lstm'].parameters(), lr=args.lr)
-    }
+    parameters = set()
+    for module in shared_modules.values():
+        parameters |= set(module.parameters())
+
+    shared_optim = SharedAdam(parameters, lr=args.lr)
 
     info = {k: torch.DoubleTensor([0]).share_memory_() for k in ['run_epr', 'run_loss', 'episodes', 'frames']}
     if int(info['frames'].item()) == 0: printlog(args, '', end='', mode='w')  # clear log file
 
     processes = []
     for rank in range(args.processes):
-        p = mp.Process(target=train, args=(shared_modules, shared_optims, rank, args, info))
+        p = mp.Process(target=train, args=(shared_modules, shared_optim, rank, args, info))
         p.start();
         processes.append(p)
     for p in processes: p.join()
