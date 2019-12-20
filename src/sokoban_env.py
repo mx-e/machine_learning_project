@@ -17,7 +17,6 @@ class SokobanEnv:
         self.room_state = self.env.room_state
 
 
-
     def get_screen(self):
         no_actions = self.action_space.n
         return torch.Tensor((copy.deepcopy(self.env.room_state))/ROOM_ENCODING_SIZE).unsqueeze(0)
@@ -29,19 +28,15 @@ class SokobanEnv:
     def step(self, action):
         self.steps_done += 1
         s_, r, done, _ =  self.env.step(action)
-        if(r > 0):
-            None
-            #self.steps_done = 0
+        if(self.steps_done > 120):
+            done = True
         if(done == True and r < 1):
-            r = -1
-        #if(self.steps_done > 100):
-        #    None
-            #done = True
-            #r = -4
+            r = -0.5
         return self.get_screen(), r, done, _
 
     def reset(self):
         self.env.reset()
+        self.steps_done = 0
         return self.get_screen()
 
     def close(self):
