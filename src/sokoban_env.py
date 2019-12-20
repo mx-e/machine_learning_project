@@ -6,6 +6,7 @@ import torch
 import copy
 
 MODE = 'Sokoban-small-v1'
+ROOM_ENCODING_SIZE = 6
 class SokobanEnv:
     def __init__(self):
         self.env = gym.make(MODE)
@@ -19,7 +20,7 @@ class SokobanEnv:
 
     def get_screen(self):
         no_actions = self.action_space.n
-        return torch.Tensor((copy.deepcopy(self.env.room_state).flatten()-no_actions/2)/no_actions)
+        return torch.Tensor((copy.deepcopy(self.env.room_state))/ROOM_ENCODING_SIZE).unsqueeze(0)
     
     def render(self):
         self.env.render()

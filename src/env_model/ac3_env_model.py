@@ -12,7 +12,6 @@ import gym_sokoban
 
 os.environ['OMP_NUM_THREADS'] = '1'
 
-
 def get_args():
     parser = argparse.ArgumentParser(description=None)
     parser.add_argument('--env', default='Breakout-ram-v4', type=str, help='gym environment')
@@ -49,6 +48,11 @@ class NNPolicy(nn.Module):  # an actor-critic neural network
         self.conv2 = torch.nn.Conv1d(in_channels=32, out_channels=32, kernel_size=3, padding=1)
         self.deconf1 = torch.nn.Conv1d(in_channels=32, out_channels=1, kernel_size=3, padding=1)
 
+        self.val_conv1 = self._make_stage(32, 32)
+        self.val_conv2 = self._make_stage(32, 1)
+        self.val_linear = nn.Linear(5, 5)
+        self.val_output = nn.Linear(5, 1)
+
 
     def forward(self, inputs, train=True, hard=False):
         state, action = inputs
@@ -62,7 +66,29 @@ class NNPolicy(nn.Module):  # an actor-critic neural network
         x = F.relu(self.conv2(x))
         predicted_state = self.deconf1(x)
 
-        return predicted_state, torch.tensor(action).unsqueeze(0)
+        x = self.val_conv1(x)
+        x = self.val_conv2(x)
+        print(x.size())
+        x = F.softmax(self.val_linear(x), dim=1)
+        predicted_value = self.val_output(x)
+
+        return predicted_state, predicted_value
+
+    def _make_stage(self, in_channels, out_channels):
+        stage = nn.Sequential()
+
+        conv = nn.Conv2d(
+            in_channels,
+            out_channels,
+            kernel_size=2,
+            stride=1,
+            padding=1,
+                )
+
+        stage.add_module('conv', conv)
+        stage.add_module('relu', nn.ReLU(inplace=True))
+        stage.add_module('pool', nn.MaxPool2d(kernel_size=2, stride=1))
+        return stage
 
     def try_load(self, save_dir):
         paths = glob.glob(save_dir + '*.tar');
@@ -111,7 +137,7 @@ def train(shared_model, shared_optimizer, rank, args, info):
     start_time = last_disp_time = time.time()
     episode_length, epr, eploss, done = 0, 0, 0, True  # bookkeeping
 
-    while info['frames'][0] <= 1e8 or args.test:  # openai baselines uses 40M frames...we'll use 80M
+    while info['frames'][0] <= 4e7 or args.test:  # openai baselines uses 40M frames...we'll use 80M
         model.load_state_dict(shared_model.state_dict())  # sync with shared model
         states, predicted_states, rewards, predicted_rewards = [], [], [], []  # save values for computing gradients
 
