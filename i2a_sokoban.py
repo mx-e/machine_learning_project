@@ -1,4 +1,7 @@
-# Baby Advantage Actor-Critic | Sam Greydanus | October 2017 | MIT License
+#!/usr/bin/env python3
+#$ -V
+#$ -cwd
+#$ -pe OpenMP 20
 
 from __future__ import print_function
 import torch, os, gym, time, sys
@@ -160,6 +163,8 @@ if __name__ == "__main__":
     if sys.version_info[0] > 2:
         mp.set_start_method('spawn')  # this must not be in global scope
 
+    for i in range(torch.cuda.device_count():
+	print(torch.cuda.get_device_name(i)
     args = get_args()
     args.save_dir = f'{args.save_dir}/{args.env.lower()}/'  # keep the directory structure simple
     if args.render:  args.processes = 1; args.test = True  # render mode -> test mode w one process
