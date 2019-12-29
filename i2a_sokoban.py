@@ -19,6 +19,7 @@ from rollout_lstm_module import Rollout_LSTM_Module
 from environment_module import Env_Module
 from rollout_unit import RolloutUnit
 from utils import configure_parser
+from policy_output_module import Policy_Output_Module
 
 os.environ['OMP_NUM_THREADS'] = '1'
 
@@ -61,7 +62,8 @@ class I2A_PipeLine:
         self.rollout_conv = modules['rollout_conv']
         self.linear_output = modules['linear_output']
         self.rollout_lstm = modules['rollout_lstm']
-        self.rollout_unit = RolloutUnit(args, self.rollout_conv, self.rollout_lstm, env_module, policy_module=None)
+        self.policy_output = modules['policy_output']
+        self.rollout_unit = RolloutUnit(args, self.rollout_conv, self.rollout_lstm, env_module, self.policy_output)
 
     def pipe(self, input):
         rollout_encoding = self.rollout_unit.make_rollout_encoding(input)
@@ -82,7 +84,8 @@ def train(shared_modules, shared_optim, rank, args, info):
         'rollout_conv': Conv2d_Module(is_sokoban=True),
         'model_free_conv': Conv2d_Module(is_sokoban=True),
         'linear_output': Linear_Module(args.output_module_input_size, args.num_actions, is_sokoban=True),
-        'rollout_lstm': Rollout_LSTM_Module(input_size=args.rollout_lstm_input_size, is_sokoban=True)
+        'rollout_lstm': Rollout_LSTM_Module(input_size=args.rollout_lstm_input_size, is_sokoban=True),
+        'policy_output': Policy_Output_Module(input_size = args.conv_output_size, num_action = args.num_actions)
     }
     model_pipeline = I2A_PipeLine(modules, env_module, args)
     state = env.reset() # get first state
@@ -173,12 +176,14 @@ if __name__ == "__main__":
     args.output_module_input_size = 2560 + args.conv_output_size
 
 
+
     torch.manual_seed(args.seed)
     shared_modules = {
         'rollout_conv': Conv2d_Module(is_sokoban=True).share_memory(),
         'model_free_conv': Conv2d_Module(is_sokoban=True).share_memory(),
         'linear_output': Linear_Module(args.output_module_input_size, args.num_actions, is_sokoban=True).share_memory(),
-        'rollout_lstm': Rollout_LSTM_Module(input_size = args.rollout_lstm_input_size, is_sokoban=True).share_memory()
+        'rollout_lstm': Rollout_LSTM_Module(input_size = args.rollout_lstm_input_size, is_sokoban=True).share_memory(),
+        'policy_output': Policy_Output_Module(input_size = args.conv_output_size, num_action = args.num_actions).share_memory()
     }
 
     parameters = set()
