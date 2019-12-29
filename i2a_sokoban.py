@@ -160,6 +160,8 @@ if __name__ == "__main__":
     if sys.version_info[0] > 2:
         mp.set_start_method('spawn')  # this must not be in global scope
 
+    for i in range(torch.cuda.device_count():
+	print(torch.cuda.get_device_name(i)
     args = get_args()
     args.save_dir = f'{args.save_dir}/{args.env.lower()}/'  # keep the directory structure simple
     if args.render:  args.processes = 1; args.test = True  # render mode -> test mode w one process
