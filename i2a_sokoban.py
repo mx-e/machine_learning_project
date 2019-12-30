@@ -38,7 +38,7 @@ def printlog(args, s, end='\n', mode='a'):
     f.write(s + '\n');
     f.close()
 
-def cost_func(args, values, logps, actions, rewards):
+def cost_func(args, values, logps, actions, rewards, copy_policy_logps):
     np_values = values.view(-1).data.numpy()
 
     # generalized advantage estimation using \delta_t residuals (a policy gradient method)
@@ -54,9 +54,10 @@ def cost_func(args, values, logps, actions, rewards):
     discounted_r = discount(np.asarray(rewards), args.gamma)
     discounted_r = torch.tensor(discounted_r.copy(), dtype=torch.float32)
     value_loss = .5 * (discounted_r - values[:-1, 0]).pow(2).sum()
+    cross_entropy_loss = (-copy_policy_logps * torch.exp(logps)).sum()
 
     entropy_loss = (-logps * torch.exp(logps)).sum()  # entropy definition, for entropy regularization
-    return policy_loss + 0.5 * value_loss - 0.01 * entropy_loss
+    return policy_loss + 0.5 * value_loss - 0.01 * entropy_loss - 0.01 * cross_entropy_loss
 
 class I2A_PipeLine:
     def __init__(self, modules, env_module, args):
@@ -72,8 +73,9 @@ class I2A_PipeLine:
         rollout_encoding = self.rollout_unit.make_rollout_encoding(input)
         conv_output = self.model_free_conv(input).flatten()
         output_layer_input = torch.cat((rollout_encoding, conv_output)).unsqueeze(0)
-        logits, value = (self.linear_output(output_layer_input))
-        return (logits, value)
+        logp, value = (self.linear_output(output_layer_input))
+        copy_policy_logp = self.policy_output(self.model_free_conv(input))
+        return (logp, value, copy_policy_logp)
 
 
 def train(shared_modules, shared_optim, rank, args, info):
@@ -100,12 +102,13 @@ def train(shared_modules, shared_optim, rank, args, info):
         for module, shared_module in zip(modules.values(), shared_modules.values()):
             module.load_state_dict(shared_module.state_dict())
 
-        values, logps, actions, rewards = [], [], [], []  # save values for computing gradientss
+        values, logps, actions, rewards, copy_policy_logps = [], [], [], [], []  # save values for computing gradientss
 
         while(True):
             episode_length += 1
-            logits, value = model_pipeline.pipe(state.unsqueeze(0))
-            logp = F.log_softmax(logits, dim=-1)
+            logp, value, copy_policy_logp = model_pipeline.pipe(state.unsqueeze(0))
+            #logp = F.log_softmax(logits, dim=-1)
+            #copy_policy_logp = F.log_softmax(copy_policy_logits, dim=-1)
 
             action = torch.exp(logp).multinomial(num_samples=1).data[0]  # logp.max(1)[1].data if args.test else
             state, reward, done, _ = env.step(action.numpy()[0])
@@ -141,12 +144,13 @@ def train(shared_modules, shared_optim, rank, args, info):
             values.append(value);
             logps.append(logp);
             actions.append(action);
-            rewards.append(reward)
+            rewards.append(reward);
+            copy_policy_logps.append(copy_policy_logp);
 
         next_value = torch.zeros(1, 1) if done else model_pipeline.pipe(state.unsqueeze(0))[1]
         values.append(next_value.detach())
 
-        loss = cost_func(args, torch.cat(values), torch.cat(logps), torch.cat(actions), np.asarray(rewards))
+        loss = cost_func(args, torch.cat(values), torch.cat(logps), torch.cat(actions), np.asarray(rewards), torch.cat(copy_policy_logps))
         eploss += loss.item()
         shared_optim.zero_grad()
         loss.backward()
@@ -163,8 +167,8 @@ if __name__ == "__main__":
     if sys.version_info[0] > 2:
         mp.set_start_method('spawn')  # this must not be in global scope
 
-    for i in range(torch.cuda.device_count():
-	print(torch.cuda.get_device_name(i)
+    for i in range(torch.cuda.device_count()):
+        print(torch.cuda.get_device_name(i))
     args = get_args()
     args.save_dir = f'{args.save_dir}/{args.env.lower()}/'  # keep the directory structure simple
     if args.render:  args.processes = 1; args.test = True  # render mode -> test mode w one process

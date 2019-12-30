@@ -1,5 +1,6 @@
 import torch, random
 import numpy as np
+import torch.nn.functional as F
 
 class RolloutUnit:
     def __init__(self, args, conv_module, encoder_module, env_module, policy_output_module):
@@ -30,8 +31,8 @@ class RolloutUnit:
             if j == 0:
                 action = range(0,self.num_actions)[n_rollout]
             else:
-                logps = self.policy_output_module(self.conv_module(state))
-                action = torch.exp(logps).multinomial(num_samples=1).data[0] 
+                logits = self.policy_output_module(self.conv_module(state))
+                action = torch.exp(logits).multinomial(num_samples=1).data[0] 
                 cur_state, value = self.env_module((cur_state.squeeze(0), action))
                 rollout_states.append(cur_state)
                 rollout_values.append(value)
