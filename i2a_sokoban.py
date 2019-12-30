@@ -107,8 +107,8 @@ def train(shared_modules, shared_optim, rank, args, info):
         while(True):
             episode_length += 1
             logp, value, copy_policy_logp = model_pipeline.pipe(state.unsqueeze(0))
-            #logp = F.log_softmax(logits, dim=-1)
-            #copy_policy_logp = F.log_softmax(copy_policy_logits, dim=-1)
+            logp = F.log_softmax(logp, dim=-1)
+            copy_policy_logp = F.log_softmax(copy_policy_logp, dim=-1)
 
             action = torch.exp(logp).multinomial(num_samples=1).data[0]  # logp.max(1)[1].data if args.test else
             state, reward, done, _ = env.step(action.numpy()[0])
