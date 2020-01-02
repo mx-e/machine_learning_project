@@ -6,6 +6,7 @@ import numpy as np
 from scipy.signal import lfilter
 import torch.nn as nn
 import torch.multiprocessing as mp
+from torch.autograd import Variable
 
 sys.path.append('../src')
 sys.path.append('./')
@@ -21,7 +22,7 @@ def get_args():
     parser.add_argument('--processes', default=8, type=int, help='number of processes to train with')
     parser.add_argument('--render', default=False, type=bool, help='renders the atari environment')
     parser.add_argument('--test', default=False, type=bool, help='sets lr=0, chooses most likely actions')
-    parser.add_argument('--rnn_steps', default=10, type=int, help='steps to train LSTM over')
+    parser.add_argument('--rnn_steps', default=1, type=int, help='steps to train LSTM over')
     parser.add_argument('--lr', default=1e-4, type=float, help='learning rate')
     parser.add_argument('--seed', default=1, type=int, help='seed random # generators (for reproducibility)')
     parser.add_argument('--gamma', default=0.99, type=float, help='rewards discount factor')
@@ -49,7 +50,7 @@ def initialize_weights(module):
         module.bias.data.zero_()
 
 class SharedAdam(torch.optim.Adam):  # extend a pytorch optimizer so it shares grads across processes
-    def __init__(self, params, lr=1e-3, betas=(0.9, 0.999), eps=1e-8, weight_decay=1e-4):
+    def __init__(self, params, lr=1e-3, betas=(0.9, 0.999), eps=1e-8, weight_decay=1e-5):
         super(SharedAdam, self).__init__(params, lr, betas, eps, weight_decay)
         for group in self.param_groups:
             for p in group['params']:
@@ -67,13 +68,10 @@ class SharedAdam(torch.optim.Adam):  # extend a pytorch optimizer so it shares g
             super.step(closure)
 
 
-def cost_func(args, states, predicted_states, rewards, predicted_rewards):
-
+def cost_func(args, state, predicted_state, reward, predicted_reward):
     loss = 0
-    for state, predicted_state in zip(states, predicted_states):
-        loss += (state-predicted_state).pow(2).sum()
-    for reward, predicted_reward in zip(rewards, predicted_rewards):
-        loss += ((reward-predicted_reward).item()**2)*5
+    loss += (state-predicted_state).pow(2).sum()
+    loss += ((reward-predicted_reward).item()**2)*5
     return loss
 
 
@@ -81,8 +79,7 @@ def cost_func(args, states, predicted_states, rewards, predicted_rewards):
 def train(shared_model, shared_optimizer, rank, args, info):
     env = SokobanEnv()  # make a local (unshared) environment
     torch.manual_seed(args.seed + rank)  # seed everything
-    model = Env_Module(input_size=args.input_size, memsize=args.hidden,
-                     num_actions=args.num_actions)  # a local/unshared model
+    model = Env_Module(input_size=args.input_size, num_actions=args.num_actions)  # a local/unshared model
     state = env.reset()  # get first state
 
     start_time = last_disp_time = time.time()
@@ -93,49 +90,46 @@ def train(shared_model, shared_optimizer, rank, args, info):
         model.load_state_dict(shared_model.state_dict())  # sync with shared model
         states, predicted_states, rewards, predicted_rewards = [], [], [], []  # save values for computing gradients
 
-        for step in range(args.rnn_steps):
-            episode_length += 1
-            action = random.sample(range(args.num_actions), 1)[0]
-            predicted_state, predicted_reward = model((state, action))
 
-            state, reward, done, _ = env.step(action)
-            if args.render: env.render()
+        episode_length += 1
+        action = random.sample(range(args.num_actions), 1)[0]
+        predicted_state, predicted_reward = model((state, action))
 
-            predicted_state = predicted_state.squeeze(0)
-            epr += reward
-            reward = torch.tensor(reward).unsqueeze(0)
-            done = done or episode_length >= 1e4  # don't playing one ep for too long
+        state, reward, done, _ = env.step(action)
+        if args.render: env.render()
 
-            info['frames'].add_(1);
-            num_frames = int(info['frames'].item())
+        predicted_state = predicted_state.squeeze(0)
+        epr += reward
+        reward = torch.tensor(reward).unsqueeze(0)
+        done = done or episode_length >= 1e4  # don't playing one ep for too long
 
-            if num_frames % 2e6 == 0:  # save every 2M frames
-                printlog(args, '\n\t{:.0f}M frames: saved model\n'.format(num_frames / 1e6))
-                torch.save(shared_model.state_dict(), args.save_dir + 'model.{:.0f}.tar'.format(num_frames / 1e6))
+        info['frames'].add_(1);
+        num_frames = int(info['frames'].item())
 
-            if done:  # update shared data
-                info['episodes'] += 1
-                interp = 1 if info['episodes'][0] == 1 else 1 - args.horizon
-                info['run_loss'].mul_(1 - interp).add_(interp * eploss)
+        if num_frames % 2e6 == 0:  # save every 2M frames
+            printlog(args, '\n\t{:.0f}M frames: saved model\n'.format(num_frames / 1e6))
+            torch.save(shared_model.state_dict(), args.save_dir + 'model.{:.0f}.tar'.format(num_frames / 1e6))
 
-            if rank == 0 and time.time() - last_disp_time > 60:  # print info ~ every minute
-                elapsed = time.strftime("%Hh %Mm %Ss", time.gmtime(time.time() - start_time))
-                printlog(args, 'time {}, episodes {:.0f}, frames {:.1f}M, run loss {:.2f}'
-                         .format(elapsed, info['episodes'].item(), num_frames / 1e6, info['run_loss'].item()))
-                last_disp_time = time.time()
+        if done:  # update shared data
+            info['episodes'] += 1
+            interp = 1 if info['episodes'][0] == 1 else 1 - args.horizon
+            info['run_loss'].mul_(1 - interp).add_(interp * eploss)
 
-            if done:  # maybe print info.
-                episode_length, epr, eploss = 0, 0, 0
-                state = env.reset()
+        if rank == 0 and time.time() - last_disp_time > 60:  # print info ~ every minute
+            elapsed = time.strftime("%Hh %Mm %Ss", time.gmtime(time.time() - start_time))
+            printlog(args, 'time {}, episodes {:.0f}, frames {:.1f}M, run loss {:.2f}'
+                     .format(elapsed, info['episodes'].item(), num_frames / 1e6, info['run_loss'].item()))
+            last_disp_time = time.time()
 
-            states.append(state)
-            predicted_states.append(predicted_state)
-            rewards.append(reward)
-            predicted_rewards.append(predicted_reward)
+        if done:  # maybe print info.
+            episode_length, epr, eploss = 0, 0, 0
+            state = env.reset()
 
-        loss_value = cost_func(args, states, predicted_states, rewards, predicted_rewards)
+        criterion = nn.CrossEntropyLoss()
+        loss_value = criterion(state.view(-1,1), predicted_state.view(-1,1))
+        loss_value += criterion(reward, predicted_reward)
         eploss += loss_value.item()
-        shared_optimizer.zero_grad();
+        shared_optimizer.zero_grad()
         loss_value.backward()
 
         for param, shared_param in zip(model.parameters(), shared_model.parameters()):
@@ -152,14 +146,13 @@ if __name__ == "__main__":
     if args.render:  args.processes = 1; args.test = True  # render mode -> test mode w one process
     if args.test:  args.lr = 0  # don't train in render mode
     env = SokobanEnv()
-    args.num_actions = env.action_space.n
+    args.num_actions = env.action_space
     args.input_size = env.observation_space.size()
 
     os.makedirs(args.save_dir) if not os.path.exists(args.save_dir) else None  # make dir to save models etc.
 
     torch.manual_seed(args.seed)
-    shared_model = Env_Module(input_size=args.input_size, memsize=args.hidden,
-                            num_actions=args.num_actions).share_memory()
+    shared_model = Env_Module(input_size=args.input_size, num_actions=args.num_actions).share_memory()
     shared_optimizer = SharedAdam(shared_model.parameters(), lr=args.lr)
 
     info = {k: torch.DoubleTensor([0]).share_memory_() for k in ['run_epr', 'run_loss', 'episodes', 'frames']}

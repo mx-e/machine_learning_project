@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-#$ -V
-#$ -cwd
-#$ -pe OpenMP 20
+# $ -V
+# $ -cwd
+# $ -pe OpenMP 20
 
 from __future__ import print_function
 import torch, os, gym, time, sys
@@ -25,11 +25,14 @@ from utils import configure_parser
 
 os.environ['OMP_NUM_THREADS'] = '1'
 
+
 def get_args():
     parser = configure_parser()
     return parser.parse_args()
 
+
 discount = lambda x, gamma: lfilter([1], [1, -gamma], x[::-1])[::-1]  # discounted rewards one liner
+
 
 def printlog(args, s, end='\n', mode='a'):
     print(s, end=end);
@@ -37,13 +40,14 @@ def printlog(args, s, end='\n', mode='a'):
     f.write(s + '\n');
     f.close()
 
+
 def cost_func(args, values, logps, actions, rewards):
     np_values = values.view(-1).data.numpy()
 
     # generalized advantage estimation using \delta_t residuals (a policy gradient method)
     delta_t = np.asarray(rewards) + args.gamma * np_values[1:] - np_values[:-1]
-    #print(actions.clone().detach().view(-1, 1))
-    #print(logps)
+    # print(actions.clone().detach().view(-1, 1))
+    # print(logps)
     logpys = logps.gather(1, actions.clone().detach().view(-1, 1))
     gen_adv_est = discount(delta_t, args.gamma * args.tau)
     policy_loss = -(logpys.view(-1) * torch.FloatTensor(gen_adv_est.copy())).sum()
@@ -56,6 +60,7 @@ def cost_func(args, values, logps, actions, rewards):
 
     entropy_loss = (-logps * torch.exp(logps)).sum()  # entropy definition, for entropy regularization
     return policy_loss + 0.5 * value_loss - 0.01 * entropy_loss
+
 
 class I2A_PipeLine:
     def __init__(self, modules, env_module, args):
@@ -88,7 +93,7 @@ def train(shared_modules, shared_optim, rank, args, info):
         'rollout_lstm': Rollout_LSTM_Module(input_size=args.rollout_lstm_input_size, is_sokoban=True)
     }
     model_pipeline = I2A_PipeLine(modules, env_module, args)
-    state = env.reset() # get first state
+    state = env.reset()  # get first state
 
     start_time = last_disp_time = time.time()
     episode_length, epr, eploss, done = 0, 0, 0, True  # bookkeeping
@@ -99,7 +104,7 @@ def train(shared_modules, shared_optim, rank, args, info):
 
         values, logps, actions, rewards = [], [], [], []  # save values for computing gradientss
 
-        while(True):
+        while (True):
             episode_length += 1
             logits, value = model_pipeline.pipe(state.unsqueeze(0))
             logp = F.log_softmax(logits, dim=-1)
@@ -115,7 +120,7 @@ def train(shared_modules, shared_optim, rank, args, info):
             num_frames = int(info['frames'].item())
             if num_frames % 2e6 == 0:  # save every 2M frames
                 printlog(args, '\n\t{:.0f}M frames: saved model\n'.format(num_frames / 1e6))
-                #torch.save(shared_model.state_dict(), args.save_dir + 'model.{:.0f}.tar'.format(num_frames / 1e6))
+                # torch.save(shared_model.state_dict(), args.save_dir + 'model.{:.0f}.tar'.format(num_frames / 1e6))
 
             if done:  # update shared data
                 info['episodes'] += 1
@@ -135,9 +140,9 @@ def train(shared_modules, shared_optim, rank, args, info):
                 state = env.reset()
                 break
 
-            values.append(value);
-            logps.append(logp);
-            actions.append(action);
+            values.append(value)
+            logps.append(logp)
+            actions.append(action)
             rewards.append(reward)
 
         next_value = torch.zeros(1, 1) if done else model_pipeline.pipe(state.unsqueeze(0))[1]
@@ -160,14 +165,14 @@ if __name__ == "__main__":
     if sys.version_info[0] > 2:
         mp.set_start_method('spawn')  # this must not be in global scope
 
-    for i in range(torch.cuda.device_count():
-	print(torch.cuda.get_device_name(i)
+    for i in range(torch.cuda.device_count()):
+        print(torch.cuda.get_device_name(i))
     args = get_args()
     args.save_dir = f'{args.save_dir}/{args.env.lower()}/'  # keep the directory structure simple
     if args.render:  args.processes = 1; args.test = True  # render mode -> test mode w one process
     if args.test:  args.lr = 0  # don't train in render mode
     env = SokobanEnv()
-    args.num_actions = env.action_space.n
+    args.num_actions = env.action_space
     args.input_size = env.observation_space.size()
 
     os.makedirs(args.save_dir) if not os.path.exists(args.save_dir) else None  # make dir to save models etc.
@@ -177,13 +182,12 @@ if __name__ == "__main__":
     args.rollout_lstm_input_size = args.conv_output_size + list(env.observation_space.flatten().size())[0]
     args.output_module_input_size = 2560 + args.conv_output_size
 
-
     torch.manual_seed(args.seed)
     shared_modules = {
         'rollout_conv': Conv2d_Module(is_sokoban=True).share_memory(),
         'model_free_conv': Conv2d_Module(is_sokoban=True).share_memory(),
         'linear_output': Linear_Module(args.output_module_input_size, args.num_actions, is_sokoban=True).share_memory(),
-        'rollout_lstm': Rollout_LSTM_Module(input_size = args.rollout_lstm_input_size, is_sokoban=True).share_memory()
+        'rollout_lstm': Rollout_LSTM_Module(input_size=args.rollout_lstm_input_size, is_sokoban=True).share_memory()
     }
 
     parameters = set()
