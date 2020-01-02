@@ -88,9 +88,6 @@ def train(shared_model, shared_optimizer, rank, args, info):
 
     while info['frames'][0] <= 1e8 or args.test:  # openai baselines uses 40M frames...we'll use 80M
         model.load_state_dict(shared_model.state_dict())  # sync with shared model
-        states, predicted_states, rewards, predicted_rewards = [], [], [], []  # save values for computing gradients
-
-
         episode_length += 1
         action = random.sample(range(args.num_actions), 1)[0]
         predicted_state, predicted_reward = model((state, action))
@@ -125,9 +122,10 @@ def train(shared_model, shared_optimizer, rank, args, info):
             episode_length, epr, eploss = 0, 0, 0
             state = env.reset()
 
-        criterion = nn.CrossEntropyLoss()
-        loss_value = criterion(state.view(-1,1), predicted_state.view(-1,1))
-        loss_value += criterion(reward, predicted_reward)
+        sigmoid = nn.Sigmoid()
+        criterion = nn.BCELoss()
+        loss_value = criterion(sigmoid(predicted_state.view(1,-1)), state.view(1,-1))
+        loss_value += (reward - predicted_reward).pow(2).squeeze()
         eploss += loss_value.item()
         shared_optimizer.zero_grad()
         loss_value.backward()

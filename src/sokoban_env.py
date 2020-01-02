@@ -18,7 +18,7 @@ class SokobanEnv:
 
 
     def get_screen(self):
-        return torch.Tensor((copy.deepcopy(self.env.room_state))/ROOM_ENCODING_SIZE).unsqueeze(0)
+        return torch.Tensor(copy.deepcopy(self.env.room_state)/ROOM_ENCODING_SIZE).unsqueeze(0)
     
     def render(self):
         self.env.render()

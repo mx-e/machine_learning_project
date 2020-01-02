@@ -1,6 +1,7 @@
 
 import argparse
 import torch.nn as nn
+import numpy as np
 
 def configure_parser():
     parser = argparse.ArgumentParser(description=None)
@@ -27,3 +28,18 @@ def initialize_weights(module):
         module.bias.data.zero_()
     elif isinstance(module, nn.Linear):
         module.bias.data.zero_()
+
+class Normalize:
+    def __init__(self, mean, std):
+        self.mean = mean
+        self.std = std
+
+    def __call__(self, tensor):
+        tensor = tensor / 8.
+        tensor = (tensor - self.mean) / self.std
+        return tensor
+
+    def denormalize(self, tensor):
+        tensor = tensor * self.std + self.mean
+        tensor = tensor * 8
+        return tensor

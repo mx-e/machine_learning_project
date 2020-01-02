@@ -6,7 +6,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 sys.path.append('../src')
-from utils import initialize_weights
+from utils import initialize_weights, Normalize
 
 
 class Env_Module(nn.Module):  # an actor-critic neural network
@@ -14,6 +14,8 @@ class Env_Module(nn.Module):  # an actor-critic neural network
         super(Env_Module, self).__init__()
         self.action_space = num_actions
         self.input_size = input_size
+        self.norm = Normalize(mean=0, std=1)
+
         self.conv1 = torch.nn.Conv2d(in_channels=self.action_space + 1, out_channels=32, kernel_size=3, padding=1)
         self.conv2 = torch.nn.Conv2d(in_channels=32, out_channels=32, kernel_size=3, padding=1)
         self.deconf1 = torch.nn.Conv2d(in_channels=32, out_channels=1, kernel_size=3, padding=1)
@@ -27,6 +29,7 @@ class Env_Module(nn.Module):  # an actor-critic neural network
 
     def forward(self, inputs, train=True, hard=False):
         state, action = inputs
+        state = self.norm(state)
 
         one_hot_action_encoding = np.zeros(self.action_space)
         one_hot_action_encoding[action] = 1
