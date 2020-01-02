@@ -1,1 +1,8 @@
-
+time 00h 01m 02s, episodes 2, frames 0.0M, mean epr -12.49, run loss 7.12
+time 00h 02m 05s, episodes 4, frames 0.0M, mean epr -12.49, run loss 19.92
+time 00h 03m 06s, episodes 6, frames 0.0M, mean epr -12.47, run loss 30.91
+time 00h 04m 19s, episodes 8, frames 0.0M, mean epr -12.46, run loss 39.28
+time 00h 05m 32s, episodes 10, frames 0.0M, mean epr -12.46, run loss 45.99
+time 00h 06m 40s, episodes 12, frames 0.0M, mean epr -12.46, run loss 49.87
+time 00h 07m 56s, episodes 14, frames 0.0M, mean epr -12.45, run loss 53.23
+time 00h 09m 13s, episodes 16, frames 0.0M, mean epr -12.44, run loss 57.44
