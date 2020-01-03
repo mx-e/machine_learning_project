@@ -18,7 +18,7 @@ def configure_parser():
     parser.add_argument('--hidden', default=256, type=int, help='hidden size of GRU')
     parser.add_argument('--save_dir', default='results', type=str, help='relative directory, in which to save models and data')
     parser.add_argument('--n_rollouts', default=5, type=int, help='no. of parallel rollouts')
-    parser.add_argument('--rollout_depth', default=5, type=int, help='depth of rollouts')
+    parser.add_argument('--rollout_depth', default=1, type=int, help='depth of rollouts')
     return parser
 
 

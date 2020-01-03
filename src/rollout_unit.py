@@ -33,9 +33,9 @@ class RolloutUnit:
             else:
                 logits = self.policy_output_module(self.conv_module(state))
                 action = torch.exp(logits).multinomial(num_samples=1).data[0] 
-                cur_state, value = self.env_module((cur_state.squeeze(0), action))
-                rollout_states.append(cur_state)
-                rollout_values.append(value)
+            cur_state, value = self.env_module((cur_state.squeeze(0), action))
+            rollout_states.append(cur_state)
+            rollout_values.append(value)
 
         hx, cx = None, None
         for rollout_state, rollout_value in zip(reversed(rollout_states), reversed(rollout_values)):
