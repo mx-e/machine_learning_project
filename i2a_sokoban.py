@@ -66,14 +66,14 @@ def cost_func(args, values, logps, actions, rewards, copy_policy_logps):
 
 
 class I2A_PipeLine:
-    def __init__(self, modules, env_module, args):
+    def __init__(self, modules, env_module, args, gpu, cpu):
         self.args = args
         self.model_free_conv = modules['model_free_conv']
         self.rollout_conv = modules['rollout_conv']
         self.linear_output = modules['linear_output']
         self.rollout_lstm = modules['rollout_lstm']
         self.policy_output = modules['policy_output']
-        self.rollout_unit = RolloutUnit(args, self.rollout_conv, self.rollout_lstm, env_module, self.policy_output)
+        self.rollout_unit = RolloutUnit(args, self.model_free_conv, self.rollout_conv, self.rollout_lstm, env_module, self.policy_output, gpu, cpu)
 
     def pipe(self, input):
         rollout_encoding = self.rollout_unit.make_rollout_encoding(input)
@@ -104,7 +104,7 @@ def train(shared_modules, shared_optim, rank, args, info):
         'rollout_lstm': Rollout_LSTM_Module(input_size=args.rollout_lstm_input_size, is_sokoban=True).to(gpu if args.cuda else cpu),
         'policy_output': Policy_Output_Module(input_size = args.conv_output_size, num_action = args.num_actions)
     }
-    model_pipeline = I2A_PipeLine(modules, env_module, args)
+    model_pipeline = I2A_PipeLine(modules, env_module, args, gpu, cpu)
     state = env.reset()  # get first state
 
     start_time = last_disp_time = time.time()
