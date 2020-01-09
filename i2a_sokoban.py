@@ -10,6 +10,7 @@ import numpy as np
 from scipy.signal import lfilter
 import torch.nn.functional as F
 import torch.multiprocessing as mp
+import cProfile
 
 sys.path.append('./src')
 sys.path.append('./src/modules')
@@ -82,8 +83,14 @@ class I2A_PipeLine:
         copy_policy_logp = self.policy_output(self.model_free_conv(input))
         return (logp, value, copy_policy_logp)
 
+# for profiling purposes
+# def test_train(shared_modules, shared_optim, rank, args, info):
+#    cProfile.runctx('train(shared_modules, shared_optim, rank, args, info)', globals(), locals(), 'prof%d.prof' % rank)
 
 def train(shared_modules, shared_optim, rank, args, info):
+    if(args.cuda):
+        gpu = torch.device('cuda')
+    cpu = torch.device('cpu')
     env = SokobanEnv()  # make a local (unshared) environment
     env.seed()
     torch.manual_seed(args.seed + rank)  # seed everything
@@ -91,10 +98,10 @@ def train(shared_modules, shared_optim, rank, args, info):
     env_module.load_state_dict(torch.load(F"./env_model/envs/{args.env.lower()}/production.tar"))
     env_module.eval()
     modules = {
-        'rollout_conv': Conv2d_Module(is_sokoban=True),
+        'rollout_conv': Conv2d_Module(is_sokoban=True).to(gpu if args.cuda else cpu),
         'model_free_conv': Conv2d_Module(is_sokoban=True),
         'linear_output': Linear_Module(args.output_module_input_size, args.num_actions, is_sokoban=True),
-        'rollout_lstm': Rollout_LSTM_Module(input_size=args.rollout_lstm_input_size, is_sokoban=True),
+        'rollout_lstm': Rollout_LSTM_Module(input_size=args.rollout_lstm_input_size, is_sokoban=True).to(gpu if args.cuda else cpu),
         'policy_output': Policy_Output_Module(input_size = args.conv_output_size, num_action = args.num_actions)
     }
     model_pipeline = I2A_PipeLine(modules, env_module, args)
@@ -157,8 +164,7 @@ def train(shared_modules, shared_optim, rank, args, info):
 
         loss = cost_func(args, torch.cat(values), torch.cat(logps), torch.cat(actions), np.asarray(rewards), torch.cat(copy_policy_logps))
         eploss += loss.item()
-        shared_optim.zero_grad()
-        loss.backward()
+
         for module in modules.values():
             torch.nn.utils.clip_grad_norm_(module.parameters(), 40)
 
@@ -175,6 +181,7 @@ if __name__ == "__main__":
     for i in range(torch.cuda.device_count()):
         print(torch.cuda.get_device_name(i))
     args = get_args()
+    args.cuda = True if torch.cuda.device_count() > 0 else args.cuda = False
     args.save_dir = f'{args.save_dir}/{args.env.lower()}/'  # keep the directory structure simple
     if args.render:  args.processes = 1; args.test = True  # render mode -> test mode w one process
     if args.test:  args.lr = 0  # don't train in render mode
