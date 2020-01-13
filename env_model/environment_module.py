@@ -24,7 +24,7 @@ class Env_Module(nn.Module):  # an actor-critic neural network
         self.val_conv2 = self._make_stage(32, 1)
         self.val_linear = nn.Linear(25, 5)
         self.val_output = nn.Linear(5, 1)
-
+        self.cuda = torch.cuda.device_count() > 0
         self.apply(initialize_weights)
 
     def forward(self, inputs, train=True, hard=False):
@@ -35,6 +35,8 @@ class Env_Module(nn.Module):  # an actor-critic neural network
         one_hot_action_encoding[action] = 1
         one_hot_action_encoding = one_hot_action_encoding.reshape(self.action_space, 1, 1)
         one_hot_action_encoding = np.tile(one_hot_action_encoding, (self.input_size)).astype(np.float32)
+        one_hot_action_encoding = torch.tensor(one_hot_action_encoding)
+        if self.cuda: one_hot_action_encoding = one_hot_action_encoding.cuda()
 
         model_input = torch.cat([state, torch.tensor(one_hot_action_encoding)]).unsqueeze(0)
         x = F.relu(self.conv1(model_input))
