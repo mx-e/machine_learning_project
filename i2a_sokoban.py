@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 #$ -V
 #$ -cwd
-#$ -l cuda=1
+#$ -pe OpenMP 20
+# $ -l cuda=1
 
 from __future__ import print_function
 import torch, os, gym, time, sys
@@ -88,8 +89,7 @@ class I2A_PipeLine:
 #    cProfile.runctx('train(shared_modules, shared_optim, rank, args, info)', globals(), locals(), 'prof%d.prof' % rank)
 
 def train(shared_modules, shared_optim, rank, args, info):
-    if(args.cuda):
-        gpu = torch.device('cuda')
+    gpu = torch.device('cuda') if args.cuda else None 
     cpu = torch.device('cpu')
     env = SokobanEnv()  # make a local (unshared) environment
     env.seed()
