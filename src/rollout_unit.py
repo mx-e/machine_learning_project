@@ -48,5 +48,5 @@ class RolloutUnit:
             processed_value = rollout_value.repeat(self.input_size).flatten()
             encoder_input = torch.cat((processed_state, processed_value)).view(-1, self.rollout_lstm_input_size)
             hx, cx = self.encoder_module((encoder_input, hx, cx))
-            if self.cuda: hx = hx.to(self.cpu)
+        if self.cuda: hx = hx.to(self.cpu)
         return hx
