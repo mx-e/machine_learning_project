@@ -94,7 +94,7 @@ def train(shared_modules, shared_optim, rank, args, info):
     env = SokobanEnv()  # make a local (unshared) environment
     env.seed()
     torch.manual_seed(args.seed + rank)  # seed everything
-    env_module = Env_Module(input_size=args.input_size, num_actions=args.num_actions)
+    env_module = Env_Module(input_size=args.input_size, num_actions=args.num_actions).to(gpu if args.cuda else cpu)
     env_module.load_state_dict(torch.load(F"./env_model/envs/{args.env.lower()}/production.tar"))
     env_module.eval()
     modules = {

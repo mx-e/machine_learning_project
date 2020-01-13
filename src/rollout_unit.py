@@ -36,14 +36,15 @@ class RolloutUnit:
                 action = range(0,self.num_actions)[n_rollout]
             else:
                 logits = self.policy_output_module(self.input_conv_module(state))
-                action = torch.exp(logits).multinomial(num_samples=1).data[0] 
+                action = torch.exp(logits).multinomial(num_samples=1).data[0]
+            if(self.cuda): cur_state, action = cur_state.to(self.gpu), action.to(self.gpu)
             cur_state, value = self.env_module((cur_state.squeeze(0), action))
             rollout_states.append(cur_state)
             rollout_values.append(value)
 
         hx, cx = None, None
         for rollout_state, rollout_value in zip(reversed(rollout_states), reversed(rollout_values)):
-            if self.cuda: rollout_state, rollout_value = rollout_state.to(self.gpu), rollout_value.to(self.gpu)
+            # if self.cuda: rollout_state, rollout_value = rollout_state.to(self.gpu), rollout_value.to(self.gpu)
             processed_state = self.rollout_conv_module(rollout_state).flatten()
             processed_value = rollout_value.repeat(self.input_size).flatten()
             encoder_input = torch.cat((processed_state, processed_value)).view(-1, self.rollout_lstm_input_size)
