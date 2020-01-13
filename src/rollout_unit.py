@@ -43,7 +43,7 @@ class RolloutUnit:
 
         hx, cx = None, None
         for rollout_state, rollout_value in zip(reversed(rollout_states), reversed(rollout_values)):
-            if self.cuda: rollout_state = rollout_state.to(self.gpu)
+            if self.cuda: rollout_state, rollout_value = rollout_state.to(self.gpu), rollout_value.to(self.gpu)
             processed_state = self.rollout_conv_module(rollout_state).flatten()
             processed_value = rollout_value.repeat(self.input_size).flatten()
             encoder_input = torch.cat((processed_state, processed_value)).view(-1, self.rollout_lstm_input_size)
