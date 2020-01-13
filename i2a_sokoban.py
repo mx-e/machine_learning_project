@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-# $ -V
-# $ -cwd
-# $ -pe OpenMP 20
+#$ -V
+#$ -cwd
+#$ -l cuda=1
 
 from __future__ import print_function
 import torch, os, gym, time, sys
@@ -181,7 +181,7 @@ if __name__ == "__main__":
     for i in range(torch.cuda.device_count()):
         print(torch.cuda.get_device_name(i))
     args = get_args()
-    args.cuda = True if torch.cuda.device_count() > 0 else args.cuda = False
+    args.cuda = torch.cuda.device_count() > 0 
     args.save_dir = f'{args.save_dir}/{args.env.lower()}/'  # keep the directory structure simple
     if args.render:  args.processes = 1; args.test = True  # render mode -> test mode w one process
     if args.test:  args.lr = 0  # don't train in render mode
