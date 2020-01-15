@@ -117,7 +117,7 @@ def train(shared_modules, shared_optim, rank, args, info):
     while info['frames'][0] <= 5e7 or args.test:  # openai baselines uses 40M frames...we'll use 80M
         for module, shared_module in zip(modules.values(), shared_modules.values()):
             if next(module.parameters()).is_cuda:
-                with torch.device(gpu):
+                with torch.cuda.device(rank%args.cuda_count):
                     module.load_state_dict(shared_module.state_dict())
             else:
                 module.load_state_dict(shared_module.state_dict())
