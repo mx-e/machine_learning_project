@@ -89,7 +89,7 @@ class I2A_PipeLine:
 #    cProfile.runctx('train(shared_modules, shared_optim, rank, args, info)', globals(), locals(), 'prof%d.prof' % rank)
 
 def train(shared_modules, shared_optim, rank, args, info):
-    gpu = torch.device('cuda') if args.cuda else None 
+    gpu = torch.cuda.device(rank % args.cuda_count) if args.cuda else None
     cpu = torch.device('cpu')
     env = SokobanEnv()  # make a local (unshared) environment
     env.seed()
@@ -112,7 +112,11 @@ def train(shared_modules, shared_optim, rank, args, info):
 
     while info['frames'][0] <= 5e7 or args.test:  # openai baselines uses 40M frames...we'll use 80M
         for module, shared_module in zip(modules.values(), shared_modules.values()):
-            module.load_state_dict(shared_module.state_dict())
+            if next(module.parameters()).is_cuda:
+                with torch.device(gpu):
+                    module.load_state_dict(shared_module.state_dict())
+            else:
+                module.load_state_dict(shared_module.state_dict())
 
         values, logps, actions, rewards, copy_policy_logps = [], [], [], [], []  # save values for computing gradientss
 
@@ -164,13 +168,19 @@ def train(shared_modules, shared_optim, rank, args, info):
 
         loss = cost_func(args, torch.cat(values), torch.cat(logps), torch.cat(actions), np.asarray(rewards), torch.cat(copy_policy_logps))
         eploss += loss.item()
+        shared_optim.zero_grad()
+        loss.backward()
 
         for module in modules.values():
             torch.nn.utils.clip_grad_norm_(module.parameters(), 40)
 
         for module, shared_module in zip(modules.values(), shared_modules.values()):
-            for param, shared_param in zip(module.parameters(), shared_module.parameters()):
-                if shared_param.grad is None: shared_param._grad = param.grad  # sync gradients with shared model
+            if next(module.parameters()).is_cuda:
+                for param, shared_param in zip(module.parameters(), shared_module.parameters()):
+                    if shared_param.grad is None: shared_param._grad = param.grad.cpu()  # if gpu, convert
+            else:
+                for param, shared_param in zip(module.parameters(), shared_module.parameters()):
+                    if shared_param.grad is None: shared_param._grad = param.grad  # sync gradients with shared model
         shared_optim.step()
 
 
@@ -181,7 +191,10 @@ if __name__ == "__main__":
     for i in range(torch.cuda.device_count()):
         print(torch.cuda.get_device_name(i))
     args = get_args()
-    args.cuda = torch.cuda.device_count() > 0 
+    args.cuda_count = torch.cuda.device_count()
+    args.cuda = args.cuda_count > 0
+    if(args.cuda):
+        torch.cuda.manual_seed(args.seed)
     args.save_dir = f'{args.save_dir}/{args.env.lower()}/'  # keep the directory structure simple
     if args.render:  args.processes = 1; args.test = True  # render mode -> test mode w one process
     if args.test:  args.lr = 0  # don't train in render mode
