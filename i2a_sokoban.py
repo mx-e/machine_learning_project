@@ -92,7 +92,7 @@ def train(shared_modules, shared_optim, rank, args, info):
     gpu = torch.cuda.device(rank % args.cuda_count) if args.cuda else None
     cpu = torch.device('cpu')
     if(args.cuda):
-        print(f"Worker {rank} on GPU No. {rank%args.cuda_count} ({torch.cuda.get_device_name(gpu)}) ")
+        print(f"Worker {rank} on GPU No. {rank%args.cuda_count} ({torch.cuda.get_device_name(rank%args.cuda_count)}, {torch.cuda.get_device_capability(rank%args.cuda_count)}) ")
     else:
         print(f"Worker {rank} on CPU")
     env = SokobanEnv()  # make a local (unshared) environment
