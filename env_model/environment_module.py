@@ -24,6 +24,7 @@ class Env_Module(nn.Module):  # an actor-critic neural network
         self.val_conv2 = self._make_stage(32, 1)
         self.val_linear = nn.Linear(25, 5)
         self.val_output = nn.Linear(5, 1)
+        self.sigmoid = nn.Sigmoid()
         self.cuda = torch.cuda.device_count() > 0
         self.apply(initialize_weights)
 
@@ -41,7 +42,7 @@ class Env_Module(nn.Module):  # an actor-critic neural network
         model_input = torch.cat([state, torch.tensor(one_hot_action_encoding)]).unsqueeze(0)
         x = F.relu(self.conv1(model_input))
         x = F.relu(self.conv2(x))
-        predicted_state = self.deconf1(x)
+        predicted_state = self.sigmoid(self.deconf1(x))
 
         x = self.val_conv1(x)
         x = self.val_conv2(x)

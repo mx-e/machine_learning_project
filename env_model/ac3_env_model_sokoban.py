@@ -122,9 +122,8 @@ def train(shared_model, shared_optimizer, rank, args, info):
             episode_length, epr, eploss = 0, 0, 0
             state = env.reset()
 
-        sigmoid = nn.Sigmoid()
         criterion = nn.BCELoss()
-        loss_value = criterion(sigmoid(predicted_state.view(1,-1)), state.view(1,-1))
+        loss_value = criterion(predicted_state.view(1,-1), state.view(1,-1))
         loss_value += (reward - predicted_reward).pow(2).squeeze()
         eploss += loss_value.item()
         shared_optimizer.zero_grad()
