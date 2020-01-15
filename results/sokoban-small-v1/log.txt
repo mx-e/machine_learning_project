@@ -1,3 +1,0 @@
-
-time 00h 01m 01s, episodes 7, frames 0.0M, mean epr -11.14, run loss -10.86
-time 00h 02m 06s, episodes 16, frames 0.0M, mean epr -10.81, run loss -6.82

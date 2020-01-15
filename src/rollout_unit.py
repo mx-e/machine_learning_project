@@ -33,10 +33,10 @@ class RolloutUnit:
 
         for j in range(self.rollout_depth):
             if j == 0:
-                action = range(0,self.num_actions)[n_rollout]
+                action = torch.tensor(range(0,self.num_actions)[n_rollout])
             else:
                 logits = self.policy_output_module(self.input_conv_module(state))
-                action = torch.exp(logits).multinomial(num_samples=1).data[0]
+                action = torch.exp(logits).multinomial(num_samples=1).squeeze()
             if(self.cuda): cur_state, action = cur_state.to(self.gpu), action.to(self.gpu)
             cur_state, value = self.env_module((cur_state.squeeze(0), action))
             rollout_states.append(cur_state)
