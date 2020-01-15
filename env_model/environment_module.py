@@ -14,8 +14,6 @@ class Env_Module(nn.Module):  # an actor-critic neural network
         super(Env_Module, self).__init__()
         self.action_space = num_actions
         self.input_size = input_size
-        self.norm = Normalize(mean=0, std=1)
-
         self.conv1 = torch.nn.Conv2d(in_channels=self.action_space + 1, out_channels=32, kernel_size=3, padding=1)
         self.conv2 = torch.nn.Conv2d(in_channels=32, out_channels=32, kernel_size=3, padding=1)
         self.deconf1 = torch.nn.Conv2d(in_channels=32, out_channels=1, kernel_size=3, padding=1)
@@ -26,20 +24,18 @@ class Env_Module(nn.Module):  # an actor-critic neural network
         self.val_output = nn.Linear(5, 1)
         self.sigmoid = nn.Sigmoid()
         self.cuda = torch.cuda.device_count() > 0
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.apply(initialize_weights)
 
     def forward(self, inputs, train=True, hard=False):
         state, action = inputs
-        state = self.norm(state)
 
-        one_hot_action_encoding = np.zeros(self.action_space)
-        one_hot_action_encoding[action] = 1
-        one_hot_action_encoding = one_hot_action_encoding.reshape(self.action_space, 1, 1)
-        one_hot_action_encoding = np.tile(one_hot_action_encoding, (self.input_size)).astype(np.float32)
-        one_hot_action_encoding = torch.tensor(one_hot_action_encoding)
-        if self.cuda: one_hot_action_encoding = one_hot_action_encoding.cuda()
+        action_one_hot_encoding = torch.tensor((self.action_space), device=self.device, dtype=torch.float)
+        action_one_hot_encoding = action_one_hot_encoding.new_zeros((self.action_space))
+        action_one_hot_encoding.index_fill_(0, action, 1)
+        action_one_hot_encoding = action_one_hot_encoding.view(-1,1,1).repeat(self.input_size)
+        model_input = torch.cat([state, action_one_hot_encoding]).unsqueeze(0)
 
-        model_input = torch.cat([state, torch.tensor(one_hot_action_encoding)]).unsqueeze(0)
         x = F.relu(self.conv1(model_input))
         x = F.relu(self.conv2(x))
         predicted_state = self.sigmoid(self.deconf1(x))
@@ -56,7 +52,7 @@ class Env_Module(nn.Module):  # an actor-critic neural network
         paths = glob.glob(save_dir + '*.tar');
         step = 0
         if len(paths) > 0:
-            ckpts = [int(s.split('.')[-2]) for s in paths]
+            ckpts = [int(s.split('.')[-2]) if not 'production' in s  else 0 for s in paths]
             ix = np.argmax(ckpts);
             step = ckpts[ix]
             self.load_state_dict(torch.load(paths[ix]))

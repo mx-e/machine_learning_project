@@ -19,11 +19,11 @@ os.environ['OMP_NUM_THREADS'] = '1'
 def get_args():
     parser = argparse.ArgumentParser(description=None)
     parser.add_argument('--env', default='Sokoban-small-v1', type=str, help='default sokoban version')
-    parser.add_argument('--processes', default=8, type=int, help='number of processes to train with')
+    parser.add_argument('--processes', default=1, type=int, help='number of processes to train with')
     parser.add_argument('--render', default=False, type=bool, help='renders the atari environment')
     parser.add_argument('--test', default=False, type=bool, help='sets lr=0, chooses most likely actions')
     parser.add_argument('--rnn_steps', default=1, type=int, help='steps to train LSTM over')
-    parser.add_argument('--lr', default=1e-4, type=float, help='learning rate')
+    parser.add_argument('--lr', default=1e-3, type=float, help='learning rate')
     parser.add_argument('--seed', default=1, type=int, help='seed random # generators (for reproducibility)')
     parser.add_argument('--gamma', default=0.99, type=float, help='rewards discount factor')
     parser.add_argument('--tau', default=1.0, type=float, help='generalized advantage estimation discount')
@@ -67,15 +67,6 @@ class SharedAdam(torch.optim.Adam):  # extend a pytorch optimizer so it shares g
                     self.state[p]['step'] = self.state[p]['shared_steps'][0] - 1  # a "step += 1"  comes later
             super.step(closure)
 
-
-def cost_func(args, state, predicted_state, reward, predicted_reward):
-    loss = 0
-    loss += (state-predicted_state).pow(2).sum()
-    loss += ((reward-predicted_reward).item()**2)*5
-    return loss
-
-
-
 def train(shared_model, shared_optimizer, rank, args, info):
     env = SokobanEnv()  # make a local (unshared) environment
     torch.manual_seed(args.seed + rank)  # seed everything
@@ -89,10 +80,10 @@ def train(shared_model, shared_optimizer, rank, args, info):
     while info['frames'][0] <= 1e8 or args.test:  # openai baselines uses 40M frames...we'll use 80M
         model.load_state_dict(shared_model.state_dict())  # sync with shared model
         episode_length += 1
-        action = random.sample(range(args.num_actions), 1)[0]
+        action = torch.tensor(random.sample(range(args.num_actions), 1)[0])
         predicted_state, predicted_reward = model((state, action))
 
-        state, reward, done, _ = env.step(action)
+        state, reward, done, _ = env.step(action.item())
         if args.render: env.render()
 
         predicted_state = predicted_state.squeeze(0)
