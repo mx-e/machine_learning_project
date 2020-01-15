@@ -23,7 +23,7 @@ from linear_module import Linear_Module
 from rollout_lstm_module import Rollout_LSTM_Module
 from environment_module import Env_Module
 from rollout_unit import RolloutUnit
-from utils import configure_parser
+from utils import configure_parser, save_modules, load_modules
 from policy_output_module import Policy_Output_Module
 
 os.environ['OMP_NUM_THREADS'] = '1'
@@ -133,7 +133,7 @@ def train(shared_modules, shared_optim, rank, args, info):
             num_frames = int(info['frames'].item())
             if num_frames % 2e6 == 0:  # save every 2M frames
                 printlog(args, '\n\t{:.0f}M frames: saved model\n'.format(num_frames / 1e6))
-                # torch.save(shared_model.state_dict(), args.save_dir + 'model.{:.0f}.tar'.format(num_frames / 1e6))
+                save_modules(shared_modules, args.save_dir + 'model_{:.2f}_.tar'.format(num_frames / 1e6))
 
             if done:  # update shared data
                 info['episodes'] += 1
@@ -212,6 +212,7 @@ if __name__ == "__main__":
     shared_optim = SharedAdam(parameters, lr=args.lr)
 
     info = {k: torch.DoubleTensor([0]).share_memory_() for k in ['run_epr', 'run_loss', 'episodes', 'frames']}
+    info['frames'] += int(load_modules(shared_modules, args.save_dir) * 1e6)
     if int(info['frames'].item()) == 0: printlog(args, '', end='', mode='w')  # clear log file
 
     processes = []
