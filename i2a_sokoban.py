@@ -89,7 +89,7 @@ class I2A_PipeLine:
 #    cProfile.runctx('train(shared_modules, shared_optim, rank, args, info)', globals(), locals(), 'prof%d.prof' % rank)
 
 def train(shared_modules, shared_optim, rank, args, info):
-    gpu = torch.cuda.device(rank % args.cuda_count) if args.cuda else None
+    gpu = torch.device(f'cuda:{rank % args.cuda_count}') if args.cuda else None
     cpu = torch.device('cpu')
     if(args.cuda):
         print(f"Worker {rank} on GPU No. {rank%args.cuda_count} ({torch.cuda.get_device_name(rank%args.cuda_count)}, {torch.cuda.get_device_capability(rank%args.cuda_count)}) ")
