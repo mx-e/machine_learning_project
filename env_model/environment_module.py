@@ -23,8 +23,7 @@ class Env_Module(nn.Module):  # an actor-critic neural network
         self.val_linear = nn.Linear(25, 5)
         self.val_output = nn.Linear(5, 1)
         self.sigmoid = nn.Sigmoid()
-        self.cuda = torch.cuda.device_count() > 0
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = torch.device("cuda" if next(self.parameters()).is_cuda else "cpu")
         self.apply(initialize_weights)
 
     def forward(self, inputs, train=True, hard=False):
