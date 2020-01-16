@@ -89,10 +89,10 @@ class I2A_PipeLine:
 #    cProfile.runctx('train(shared_modules, shared_optim, rank, args, info)', globals(), locals(), 'prof%d.prof' % rank)
 
 def train(shared_modules, shared_optim, rank, args, info):
-    args.cuda = args.cuda and rank <= args.max_on_cuda
-    gpu = torch.device(f'cuda:{rank % args.cuda_count}') if args.cuda else None
+    cuda = args.cuda and rank <= args.max_on_cuda
+    gpu = torch.device(f'cuda:{rank % args.cuda_count}') if cuda else None
     cpu = torch.device('cpu')
-    if(args.cuda):
+    if(cuda):
         print(f"Worker {rank} on GPU No. {rank%args.cuda_count} ({torch.cuda.get_device_name(rank%args.cuda_count)}, {torch.cuda.get_device_capability(rank%args.cuda_count)}) ")
     else:
         print(f"Worker {rank} on CPU")
@@ -103,10 +103,10 @@ def train(shared_modules, shared_optim, rank, args, info):
     env_module.load_state_dict(torch.load(F"./env_model/envs/{args.env.lower()}/production.tar"))
     env_module.eval()
     modules = {
-        'rollout_conv': Conv2d_Module(is_sokoban=True).to(gpu if args.cuda else cpu),
+        'rollout_conv': Conv2d_Module(is_sokoban=True).to(gpu if cuda else cpu),
         'model_free_conv': Conv2d_Module(is_sokoban=True),
         'linear_output': Linear_Module(args.output_module_input_size, args.num_actions, is_sokoban=True),
-        'rollout_lstm': Rollout_LSTM_Module(input_size=args.rollout_lstm_input_size, is_sokoban=True).to(gpu if args.cuda else cpu),
+        'rollout_lstm': Rollout_LSTM_Module(input_size=args.rollout_lstm_input_size, is_sokoban=True).to(gpu if cuda else cpu),
         'policy_output': Policy_Output_Module(input_size = args.conv_output_size, num_action = args.num_actions)
     }
     model_pipeline = I2A_PipeLine(modules, env_module, args, gpu, cpu)
