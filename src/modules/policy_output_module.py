@@ -16,6 +16,6 @@ class Policy_Output_Module(nn.Module):  # an actor-critic neural network
         
     def forward(self, inputs, train=True, hard=False):
         
-        inputs = inputs.view(-1, 576)
+        inputs = inputs.view(-1, 144)
         x = F.relu(self.linear1(inputs))
         return F.softmax(self.linear2(x), dim=1)

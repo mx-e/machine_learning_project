@@ -25,7 +25,6 @@ class SokobanEnv:
         return self.get_screen()
 
     def step(self, action):
-
         self.steps_done += 1
         r, done =  self.eval_step(action)
         if(self.steps_done > 120):

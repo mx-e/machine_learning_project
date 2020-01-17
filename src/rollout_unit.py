@@ -27,10 +27,9 @@ class RolloutUnit:
         return concat_encodings.flatten()
 
     def make_rollout(self, state, n_rollout):
-        rollout_states = []
-        rollout_values = []
         cur_state = state
 
+        hx, cx = None, None
         for j in range(self.rollout_depth):
             if j == 0:
                 action = torch.tensor(range(0,self.num_actions)[n_rollout])
@@ -38,12 +37,8 @@ class RolloutUnit:
                 logits = self.policy_output_module(self.input_conv_module(state))
                 action = torch.exp(logits).multinomial(num_samples=1).squeeze()
             #if(self.cuda): cur_state, action = cur_state.to(self.gpu), action.to(self.gpu)
-            cur_state, value = self.env_module((cur_state.squeeze(0), action))
-            rollout_states.append(cur_state)
-            rollout_values.append(value)
+            rollout_state, rollout_value = self.env_module((cur_state.squeeze(0), action))
 
-        hx, cx = None, None
-        for rollout_state, rollout_value in zip(reversed(rollout_states), reversed(rollout_values)):
             if self.cuda: rollout_state, rollout_value = rollout_state.to(self.gpu), rollout_value.to(self.gpu)
             processed_state = self.rollout_conv_module(rollout_state).flatten()
             processed_value = rollout_value.repeat(self.input_size).flatten()

@@ -10,9 +10,9 @@ class Linear_Module(nn.Module):  # an actor-critic neural network
     def __init__(self, input_size, num_action, is_sokoban):
         super(Linear_Module, self).__init__()
         if(is_sokoban):
-            self.linear = nn.Linear(input_size, 512)
-            self.logit = nn.Linear(512, num_action)
-            self.value = nn.Linear(512, 1)
+            self.linear = nn.Linear(input_size, 256)
+            self.logit = nn.Linear(256, num_action)
+            self.value = nn.Linear(256, 1)
         else:
             self.linear = nn.Linear(input_size, 256)
             self.logit = nn.Linear(256, num_action)

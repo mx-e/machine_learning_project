@@ -23,7 +23,7 @@ from linear_module import Linear_Module
 from rollout_lstm_module import Rollout_LSTM_Module
 from environment_module import Env_Module
 from rollout_unit import RolloutUnit
-from utils import configure_parser, save_modules, load_modules
+from utils import configure_parser, save_modules, load_modules, update_shared_info, update_log, printlog
 from policy_output_module import Policy_Output_Module
 
 os.environ['OMP_NUM_THREADS'] = '1'
@@ -35,13 +35,6 @@ def get_args():
 
 
 discount = lambda x, gamma: lfilter([1], [1, -gamma], x[::-1])[::-1]  # discounted rewards one liner
-
-
-def printlog(args, s, end='\n', mode='a'):
-    print(s, end=end);
-    f = open(args.save_dir + 'log.txt', mode);
-    f.write(s + '\n');
-    f.close()
 
 def cost_func(args, values, logps, actions, rewards, copy_policy_logps):
 
@@ -113,7 +106,7 @@ def train(shared_modules, shared_optim, rank, args, info):
     state = env.reset()  # get first state
 
     start_time = last_disp_time = time.time()
-    episode_length, epr, eploss, done = 0, 0, 0, True  # bookkeeping
+    episode_length, epr, eploss, no_boxes, done = 0, 0, 0, 0, True  # bookkeeping
 
     while info['frames'][0] <= 5e7 or args.test:  # openai baselines uses 40M frames...we'll use 80M
         for module, shared_module in zip(modules.values(), shared_modules.values()):
@@ -134,7 +127,10 @@ def train(shared_modules, shared_optim, rank, args, info):
             action = torch.exp(logp).multinomial(num_samples=1).data[0]  # logp.max(1)[1].data if args.test else
             state, reward, done, _ = env.step(action.numpy()[0])
             if args.render: env.render()
-
+            if reward >= 0.9:
+                no_boxes+=1
+            if reward <= -0.9:
+                no_boxes-=1
             epr += reward
             reward = np.clip(reward, -1, 10)  # reward
 
@@ -145,20 +141,14 @@ def train(shared_modules, shared_optim, rank, args, info):
                 save_modules(shared_modules, args.save_dir + 'model_{:.2f}_.tar'.format(num_frames / 1e6))
 
             if done:  # update shared data
-                info['episodes'] += 1
-                interp = 1 if info['episodes'][0] == 1 else 1 - args.horizon
-                info['run_epr'].mul_(1 - interp).add_(interp * epr)
-                info['run_loss'].mul_(1 - interp).add_(interp * eploss)
+                update_shared_info(args, eploss, epr, info, no_boxes)
 
             if rank == 0 and time.time() - last_disp_time > 60:  # print info ~ every minute
-                elapsed = time.strftime("%Hh %Mm %Ss", time.gmtime(time.time() - start_time))
-                printlog(args, 'time {}, episodes {:.0f}, frames {:.1f}M, mean epr {:.2f}, run loss {:.2f}'
-                         .format(elapsed, info['episodes'].item(), num_frames / 1e6,
-                                 info['run_epr'].item(), info['run_loss'].item()))
+                update_log(args, info, num_frames, start_time)
                 last_disp_time = time.time()
 
             if done:  # maybe print info.
-                episode_length, epr, eploss = 0, 0, 0
+                episode_length, epr, eploss, no_boxes = 0, 0, 0, 0
                 state = env.reset()
                 break
 
@@ -188,7 +178,6 @@ def train(shared_modules, shared_optim, rank, args, info):
                     if shared_param.grad is None: shared_param._grad = param.grad  # sync gradients with shared model
         shared_optim.step()
 
-
 if __name__ == "__main__":
     if sys.version_info[0] > 2:
         mp.set_start_method('spawn')  # this must not be in global scope
@@ -212,7 +201,7 @@ if __name__ == "__main__":
     test_img = torch.Tensor(np.zeros((args.input_size))).unsqueeze(0)
     args.conv_output_size = list(test_net(test_img).flatten().size())[0]
     args.rollout_lstm_input_size = args.conv_output_size + list(env.observation_space.flatten().size())[0]
-    args.output_module_input_size = 2560 + args.conv_output_size
+    args.output_module_input_size = 1280 + args.conv_output_size
 
     torch.manual_seed(args.seed)
     shared_modules = {
@@ -229,7 +218,7 @@ if __name__ == "__main__":
 
     shared_optim = SharedAdam(parameters, lr=args.lr)
 
-    info = {k: torch.DoubleTensor([0]).share_memory_() for k in ['run_epr', 'run_loss', 'episodes', 'frames']}
+    info = {k: torch.DoubleTensor([0]).share_memory_() for k in ['run_epr', 'run_loss', 'episodes', 'frames', 'one_box', 'two_boxes', 'three_boxes']}
     info['frames'] += int(load_modules(shared_modules, args.save_dir) * 1e6)
     if int(info['frames'].item()) == 0: printlog(args, '', end='', mode='w')  # clear log file
 

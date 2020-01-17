@@ -9,7 +9,7 @@ from utils import initialize_weights
 class Rollout_LSTM_Module(nn.Module):  # an actor-critic neural network
     def __init__(self, input_size, is_sokoban):
         super(Rollout_LSTM_Module, self).__init__()
-        self.lstm = nn.LSTMCell(input_size, 512 if is_sokoban else 256)
+        self.lstm = nn.LSTMCell(input_size, 256 if is_sokoban else 256)
         #self.apply(initialize_weights)
 
     def forward(self, inputs, train=True, hard=False):
