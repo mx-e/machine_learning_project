@@ -19,7 +19,7 @@ os.environ['OMP_NUM_THREADS'] = '1'
 def get_args():
     parser = argparse.ArgumentParser(description=None)
     parser.add_argument('--env', default='Sokoban-small-v1', type=str, help='default sokoban version')
-    parser.add_argument('--processes', default=1, type=int, help='number of processes to train with')
+    parser.add_argument('--processes', default=8, type=int, help='number of processes to train with')
     parser.add_argument('--render', default=False, type=bool, help='renders the atari environment')
     parser.add_argument('--test', default=False, type=bool, help='sets lr=0, chooses most likely actions')
     parser.add_argument('--rnn_steps', default=1, type=int, help='steps to train LSTM over')
@@ -141,6 +141,10 @@ if __name__ == "__main__":
 
     torch.manual_seed(args.seed)
     shared_model = Env_Module(input_size=args.input_size, num_actions=args.num_actions).share_memory()
+
+    path_saved_model = "/home/christian/WORKSPACE/machine_learning_project/env_model/envs/sokoban-small-v1/model.20.tar"
+    shared_model.load_state_dict(torch.load(path_saved_model))
+    
     shared_optimizer = SharedAdam(shared_model.parameters(), lr=args.lr)
 
     info = {k: torch.DoubleTensor([0]).share_memory_() for k in ['run_epr', 'run_loss', 'episodes', 'frames']}
