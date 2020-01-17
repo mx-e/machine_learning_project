@@ -11,6 +11,7 @@ import torch.multiprocessing as mp
 import torch.nn as nn
 sys.path.append('./src')
 from prediction_screening import prediction_screening
+from scatter import scatter
 sys.path.append('./src/modules')
 sys.path.append('./env_model')
 from sokoban_env import SokobanEnv
@@ -67,31 +68,7 @@ class performance_insights:
         
         
 
-env1 = SokobanEnv() #initialize environment
 
-state = env1.get_screen()
 
-real_pic_name1 = "test_real_1"
-pred_pic_name1 = "test_model_1"
-path_dict_env_module1 = "/Users/heiko.langer/TUB/ProjML/machine_learning_project-i2a-sokoban-v1/env_model/envs/sokoban-small-v1/production.tar"
-action = [2,3,2,1,0,2,1,3,2]
-
-#reward_comparison = np.empty(2,1)
-reward_array_real = np.empty([1,1])
-reward_array_model = np.empty([1,1])
-counter = 0
-for i in action:
-    counter+= 1
-    real_nxt_state1, reward_real1 ,model_predictions_norm1 , reward_model1 = performance_insights.prediction_comparison(path_dict_env_module1,env1,state,i)
-    reward_model1 = float(reward_model1.data)
-    
-    print(str(reward_real1)+" predicted "+ str(reward_model1))
-    real_pic_name = "real" + str(counter) +".png" 
-    performance_insights.savepics(real_nxt_state1, real_pic_name)
-    model_pic_name = "model" + str(counter) +".png" 
-    performance_insights.savepics(model_predictions_norm1, model_pic_name)
-
-    state = real_nxt_state1
-    
 
     

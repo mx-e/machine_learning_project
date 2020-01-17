@@ -57,8 +57,14 @@ def prediction_screening(environment_state, picturename):
 	rgb_array = np.array(rgb_array,dtype=np.uint8) 
 
 	img = Image.fromarray(rgb_array,'RGB')
-	img.save(picturename)
+	#test side by side
+	
+	img = img.resize( (400, 400))
+	
+	img.save(picturename, "PNG")
 
+	
+	
 
 
 
