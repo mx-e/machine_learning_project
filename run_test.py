@@ -36,7 +36,7 @@ class run_test:
 
 	real_pic_name1 = "game_state"
 	pred_pic_name1 = "predicted_game_state"
-	path_dict_env_module1 = "/Users/heiko.langer/TUB/ProjML/machine_learning_project-i2a-sokoban-v1/env_model/envs/sokoban-small-v1/production.tar"
+	path_dict_env_module1 = "/Users/heiko.langer/GIT/machine_learning_project/env_model/envs/sokoban-small-v1/production.tar"
 	possible_actions = [0,1,2,3,4]
 	action = random.choices(possible_actions,k=50)
 
