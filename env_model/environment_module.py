@@ -14,9 +14,9 @@ class Env_Module(nn.Module):  # an actor-critic neural network
         super(Env_Module, self).__init__()
         self.action_space = num_actions
         self.input_size = input_size
-        self.conv1 = torch.nn.Conv2d(in_channels=self.action_space + 1, out_channels=32, kernel_size=3, padding=1)
+        self.conv1 = torch.nn.Conv2d(in_channels=self.action_space + 3, out_channels=32, kernel_size=3, padding=1)
         self.conv2 = torch.nn.Conv2d(in_channels=32, out_channels=32, kernel_size=3, padding=1)
-        self.deconf1 = torch.nn.Conv2d(in_channels=32, out_channels=1, kernel_size=3, padding=1)
+        self.deconf1 = torch.nn.Conv2d(in_channels=32, out_channels=3, kernel_size=3, padding=1)
 
         self.val_conv1 = self._make_stage(32, 32)
         self.val_conv2 = self._make_stage(32, 1)
@@ -28,7 +28,6 @@ class Env_Module(nn.Module):  # an actor-critic neural network
 
     def forward(self, inputs, train=True, hard=False):
         state, action = inputs
-
         action_one_hot_encoding = torch.tensor((self.action_space), device=self.device, dtype=torch.float)
         action_one_hot_encoding = action_one_hot_encoding.new_zeros((self.action_space))
         action_one_hot_encoding.index_fill_(0, action, 1)
@@ -54,7 +53,7 @@ class Env_Module(nn.Module):  # an actor-critic neural network
             ckpts = [int(s.split('.')[-2]) if not 'production' in s  else 0 for s in paths]
             ix = np.argmax(ckpts);
             step = ckpts[ix]
-            self.load_state_dict(torch.load(paths[ix]))
+            if ix > 0: self.load_state_dict(torch.load(paths[ix]))
         print("\tno saved models") if step is 0 else print("\tloaded model: {}".format(paths[ix]))
         return step
 
