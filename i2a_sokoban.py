@@ -163,12 +163,12 @@ def train(shared_modules, shared_optim, rank, args, info):
 
         loss = cost_func(args, torch.cat(values), torch.cat(logps), torch.cat(actions), np.asarray(rewards), torch.cat(copy_policy_logps))
         eploss += loss.item()
-        shared_optim.zero_grad()
         loss.backward()
 
         for module in modules.values():
             torch.nn.utils.clip_grad_norm_(module.parameters(), 40)
 
+        shared_optim.zero_grad()
         for module, shared_module in zip(modules.values(), shared_modules.values()):
             if next(module.parameters()).is_cuda:
                 for param, shared_param in zip(module.parameters(), shared_module.parameters()):

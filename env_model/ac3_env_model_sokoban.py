@@ -116,9 +116,9 @@ def train(shared_model, shared_optimizer, rank, args, info):
         loss_value = criterion(predicted_state.view(1,-1), state.view(1,-1))
         loss_value += (reward - predicted_reward).pow(2).squeeze()
         eploss += loss_value.item()
-        shared_optimizer.zero_grad()
-        loss_value.backward()
 
+        loss_value.backward()
+        shared_optimizer.zero_grad()
         for param, shared_param in zip(model.parameters(), shared_model.parameters()):
             if shared_param.grad is None: shared_param._grad = param.grad  # sync gradients with shared model
         shared_optimizer.step()
