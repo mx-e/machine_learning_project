@@ -23,7 +23,7 @@ def get_args():
     parser.add_argument('--render', default=False, type=bool, help='renders the atari environment')
     parser.add_argument('--test', default=False, type=bool, help='sets lr=0, chooses most likely actions')
     parser.add_argument('--rnn_steps', default=1, type=int, help='steps to train LSTM over')
-    parser.add_argument('--lr', default=1e-3, type=float, help='learning rate')
+    parser.add_argument('--lr', default=1e-4, type=float, help='learning rate')
     parser.add_argument('--seed', default=1, type=int, help='seed random # generators (for reproducibility)')
     parser.add_argument('--gamma', default=0.99, type=float, help='rewards discount factor')
     parser.add_argument('--tau', default=1.0, type=float, help='generalized advantage estimation discount')
@@ -75,7 +75,6 @@ def train(shared_model, shared_optimizer, rank, args, info):
 
     start_time = last_disp_time = time.time()
     episode_length, epr, eploss, done = 0, 0, 0, True  # bookkeeping
-    loss = nn.CrossEntropyLoss()
 
     while info['frames'][0] <= 1e8 or args.test:  # openai baselines uses 40M frames...we'll use 80M
         model.load_state_dict(shared_model.state_dict())  # sync with shared model
@@ -141,9 +140,6 @@ if __name__ == "__main__":
 
     torch.manual_seed(args.seed)
     shared_model = Env_Module(input_size=args.input_size, num_actions=args.num_actions).share_memory()
-
-    path_saved_model = "/home/christian/WORKSPACE/machine_learning_project/env_model/envs/sokoban-small-v1/model.20.tar"
-    shared_model.load_state_dict(torch.load(path_saved_model))
     
     shared_optimizer = SharedAdam(shared_model.parameters(), lr=args.lr)
 

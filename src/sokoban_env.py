@@ -12,16 +12,19 @@ class SokobanEnv:
         self.env = gym.make(MODE)
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.steps_done = 0
-        self.action_space = 5 #reducing action space (push and move in a direction is evaluated)
-        self.observation_space = self.get_screen()
+        self.action_space = 4 #reducing action space (push and move in a direction is evaluated), no no-op
+        self.observation_space = self.getEnvState()
         self.room_state = self.env.room_state
 
+    def getEnvState(self):
+        return torch.tensor(self.env.room_state).unsqueeze(0)
 
     def get_screen(self):
-        return torch.Tensor(copy.deepcopy(self.env.room_state)/ROOM_ENCODING_SIZE).unsqueeze(0)
+        #print(torch.from_numpy(self.env.render('tiny_rgb_array')).permute(2,0,1).float())
+        return torch.from_numpy(self.env.render('tiny_rgb_array')).permute(2,0,1).float()/255
     
     def render(self):
-        self.env.render()
+        self.env.render('tiny_rgb_array')
         return self.get_screen()
 
     def step(self, action):
@@ -39,19 +42,18 @@ class SokobanEnv:
             location = np.argwhere(self.env.room_state == 5)
             x = location[0, 1]
             y = location[0, 0]
-            if(action == 1):
+            if(action == 0):
                 obstacle = self.env.room_state[y-1,x]
-            elif(action == 2):
+            elif(action == 1):
                 obstacle = self.env.room_state[y+1,x]
-            elif(action == 3):
+            elif(action == 2):
                 obstacle = self.env.room_state[y,x-1]
             else:
                 obstacle = self.env.room_state[y,x+1]
-            if(obstacle == 0): return (-0.1, False)
-            elif(obstacle != 3 and obstacle !=4):
-                _, r, done, _ = self.env.step(action + 4) # move, if there is no box or box on a target
+            if(obstacle != 3 and obstacle !=4):
+                _, r, done, _ = self.env.step(action + 5) # move, if there is no box or box on a target
             else:
-                _, r, done, _ = self.env.step(action) # otherwise, push box
+                _, r, done, _ = self.env.step(action + 1) # otherwise, push box
             return (r, done)
 
     def reset(self):
