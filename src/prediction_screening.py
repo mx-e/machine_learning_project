@@ -15,17 +15,22 @@ from PIL import Image
 import matplotlib
 import matplotlib.cm as cm
 import numpy as np
+import torchvision
+from torchvision import transforms
 
 
 def prediction_screening(environment_state, picturename):
 
 	#print(type(testenvironment))
 	gamestate = environment_state
+	#gamestate = gamestate.permute(1,2,0)
+	gamestate = transforms.ToPILImage(mode = 'RGB')(gamestate)
+	rgb_array = gamestate
 	#gamestate = environment_state.get_screen() 
 	#print(gamestate.size())
 	#print(gamestate)
-
-
+	'''
+	print(gamestate)
 	gamestate=gamestate.numpy()
 
 	gamestate_reshaped=gamestate.reshape((7,7,1))
@@ -54,14 +59,30 @@ def prediction_screening(environment_state, picturename):
 			#print(gamestate_reshaped[i,j])
 	#print(rgb_array)
 	#print(rgb_array.shape)
-	rgb_array = np.array(rgb_array,dtype=np.uint8) 
+	'''
+	#rgb_array = np.array(rgb_array,dtype=np.uint8)
+	#rgb_array = rgb_array*255
+	#rgb_array = rgb_array.numpy() *255
 
-	img = Image.fromarray(rgb_array,'RGB')
+		#print(rgb_array.shape)
+	#rgb_array = rgb_array.reshape(7,7,3)
+	
+	#rgb_array = np.moveaxis(rgb_array,0,-1)
+	#rgb_array = np.array(rgb_array,dtype=np.uint8) 
+	#print(rgb_array)
+	#print(rgb_array.shape)
+
+	#img = Image.fromarray(rgb_array,'RGB')
+
+	#img = Image.fromarray(rgb_array,'P')
+	#img = Image.fromarray(rgb_array,'RGBA')
 	#test side by side
+	rgb_array=rgb_array.resize((400,400))
+	rgb_array.save(picturename,"PNG")
+
+	#img = img.resize( (400, 400))
 	
-	img = img.resize( (400, 400))
-	
-	img.save(picturename, "PNG")
+	#img.save(picturename, "PNG")
 
 	
 	

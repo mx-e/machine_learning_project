@@ -42,7 +42,7 @@ class performance_insights:
 
 
         env = environment
-        action1 = action
+        action1 = int(action)
 
         env_module = Env_Module(input_size=input_size, num_actions=num_actions)
         env_module.load_state_dict(torch.load(path_dict_env_module))
@@ -53,7 +53,7 @@ class performance_insights:
         model_nxt_state = state
 
         real_nxt_state,reward_real,done,_= env.step(action1) #do step with action
-        #print(action1)
+        #print(real_nxt_state)
         action2 = torch.zeros(1,dtype=torch.long)
         action2[0] = action1
         #print(action2)
@@ -61,6 +61,8 @@ class performance_insights:
         #print(action3)
         
         model_nxt_state, reward_model = env_module.forward((model_nxt_state, action3)) #self.env_module((model_nxt_state.squeeze(0), action))
+        #print(model_nxt_state)
+        #print('jsia')
         #model_nxt_state = sigmoid(model_nxt_state)
         model_predictions_norm = model_nxt_state.data
         

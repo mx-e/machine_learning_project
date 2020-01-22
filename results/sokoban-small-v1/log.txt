@@ -1,0 +1,2 @@
+
+time 00h 01m 00s, episodes 2, frames 0.0M, mean epr 8.79, run loss 0.00
