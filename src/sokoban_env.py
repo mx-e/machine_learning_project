@@ -20,7 +20,6 @@ class SokobanEnv:
         return torch.tensor(self.env.room_state).unsqueeze(0)
 
     def get_screen(self):
-        #print(torch.from_numpy(self.env.render('tiny_rgb_array')).permute(2,0,1).float())
         return torch.from_numpy(self.env.render('tiny_rgb_array')).permute(2,0,1).float()/255
     
     def render(self):
@@ -36,25 +35,23 @@ class SokobanEnv:
         return self.get_screen(), r, done, None
 
     def eval_step(self, action):
-        if (action == 0):
-            return (-0.1, False)
+        location = np.argwhere(self.env.room_state == 5)
+        x = location[0, 1]
+        y = location[0, 0]
+        print(x,y,action)
+        if(action == 0):
+            obstacle = self.env.room_state[y-1,x]
+        elif(action == 1):
+            obstacle = self.env.room_state[y+1,x]
+        elif(action == 2):
+            obstacle = self.env.room_state[y,x-1]
         else:
-            location = np.argwhere(self.env.room_state == 5)
-            x = location[0, 1]
-            y = location[0, 0]
-            if(action == 0):
-                obstacle = self.env.room_state[y-1,x]
-            elif(action == 1):
-                obstacle = self.env.room_state[y+1,x]
-            elif(action == 2):
-                obstacle = self.env.room_state[y,x-1]
-            else:
-                obstacle = self.env.room_state[y,x+1]
-            if(obstacle != 3 and obstacle !=4):
-                _, r, done, _ = self.env.step(action + 5) # move, if there is no box or box on a target
-            else:
-                _, r, done, _ = self.env.step(action + 1) # otherwise, push box
-            return (r, done)
+            obstacle = self.env.room_state[y,x+1]
+        if(obstacle != 3 and obstacle !=4):
+            _, r, done, _ = self.env.step(action + 5) # move, if there is no box or box on a target
+        else:
+            _, r, done, _ = self.env.step(action + 1) # otherwise, push box
+        return (r, done)
 
     def reset(self):
         self.env.reset()
