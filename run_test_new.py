@@ -36,10 +36,10 @@ class run_test:
 
 	real_pic_name1 = "game_state"
 	pred_pic_name1 = "predicted_game_state"
-	path_dict_env_module1 = "/Users/heiko.langer/GIT/machine_learning_project/env_model/envs/sokoban-small-v1/production.tar"
-	possible_actions = [0,1,2,3,4]
-	action = random.choices(possible_actions,k=50)
-
+	path_dict_env_module1 = "/Users/heiko.langer/GIT/machine_learning_project/env_model/envs/sokoban-small-v1/model.2.tar"
+	possible_actions = [0,1,2,3]
+	action = random.choices(possible_actions,k=100)
+	#print(action)
 	#reward_comparison = np.empty(2,1)
 	reward_array_real = np.empty([1,1])
 	reward_array_model = np.empty([1,1])
@@ -47,7 +47,9 @@ class run_test:
 	name = "scatter_plot.png"
 	for i in action:
 	    counter+= 1
+	    i = int(i)
 	    real_nxt_state1, reward_real1 ,model_predictions_norm1 , reward_model1 = performance_insights.prediction_comparison(path_dict_env_module1,env1,state,i)
+	    
 	    reward_model1 = float(reward_model1.data)
 	    model_predictions_norm1 = model_predictions_norm1[0,:,:,:]
 	    #print(str(reward_real1)+" predicted "+ str(reward_model1))
@@ -55,9 +57,9 @@ class run_test:
 	    reward_array_model = np.append(reward_array_model,reward_model1)
 
 
-	    real_pic_name = "real" + str(counter) 
+	    real_pic_name = "real" + str(counter).zfill(3) 
 	    performance_insights.savepics(real_nxt_state1, real_pic_name)
-	    model_pic_name = "model" + str(counter) 
+	    model_pic_name = "model" + str(counter).zfill(3)  
 	    performance_insights.savepics(model_predictions_norm1, model_pic_name)
 
 	    #img_sidebyside_array = np.concatenate((real_nxt_state1,model_predictions_norm1), axis = 1)
@@ -72,6 +74,7 @@ class run_test:
 		
 
 	    state = real_nxt_state1
+
 	#print(reward_array_real)
 	#print(reward_array_model)
 
@@ -79,7 +82,7 @@ class run_test:
 	reward_array_both = np.empty((len(action),1))
 	#print(reward_array_both.ndim)
 	reward_array_both = np.vstack((reward_array_real,reward_array_model))#, axis = 1)
-	print(reward_array_both)
+	#print(reward_array_both)
 	#scatter.makescatterplot(reward_array_both,name)
 
 	scatter.makescatterplot(reward_array_real,reward_array_model,name)
