@@ -38,7 +38,6 @@ class SokobanEnv:
         location = np.argwhere(self.env.room_state == 5)
         x = location[0, 1]
         y = location[0, 0]
-        print(x,y,action)
         if(action == 0):
             obstacle = self.env.room_state[y-1,x]
         elif(action == 1):
