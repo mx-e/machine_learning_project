@@ -241,10 +241,10 @@ if __name__ == "__main__":
 
     os.makedirs(args.save_dir) if not os.path.exists(args.save_dir) else None  # make dir to save models etc.
     test_net = Conv2d_Module(is_sokoban=True)
-    test_img = torch.Tensor(np.zeros((args.input_size))).unsqueeze(0)
-    args.conv_output_size = list(test_net(test_img).flatten().size())[0]
+    test_img = env.render().unsqueeze(0)
+    args.conv_output_size = test_net(test_img).view(-1).size()[0]
     args.rollout_lstm_input_size = args.conv_output_size + list(env.observation_space.flatten().size())[0]
-    args.output_module_input_size = 1280 + args.conv_output_size
+    args.output_module_input_size = 1024 + args.conv_output_size
 
     torch.manual_seed(args.seed)
     shared_modules = {

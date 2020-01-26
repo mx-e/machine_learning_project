@@ -17,7 +17,7 @@ def configure_parser():
     parser.add_argument('--horizon', default=0.99, type=float, help='horizon for running averages')
     parser.add_argument('--hidden', default=256, type=int, help='hidden size of GRU')
     parser.add_argument('--save_dir', default='results', type=str, help='relative directory, in which to save models and data')
-    parser.add_argument('--n_rollouts', default=5, type=int, help='no. of parallel rollouts')
+    parser.add_argument('--n_rollouts', default=4, type=int, help='no. of parallel rollouts')
     parser.add_argument('--rollout_depth', default=3, type=int, help='depth of rollouts')
     parser.add_argument('--max_on_cuda', default=20, type=int, help='depth of rollouts')
     return parser
@@ -53,11 +53,11 @@ def save_modules(module_list, save_path):
     torch.save(state_dicts, save_path)
 
 def load_modules(module_list, save_dir):
-    paths = glob.glob(save_dir + '*.tar');
+    paths = glob.glob(save_dir + '*.tar')
     step = 0.
     if len(paths) > 0:
         ckpts = [float(s.split('_')[-2]) if not 'production' in s else 0. for s in paths]
-        ix = np.argmax(ckpts);
+        ix = np.argmax(ckpts)
         step = ckpts[ix]
         checkpoint = torch.load(paths[ix])
         for key, value in module_list.items():
@@ -91,7 +91,7 @@ def update_log(args, info, num_frames, start_time):
                      info['three_boxes'].item()))
 
 def printlog(args, s, end='\n', mode='a'):
-    print(s, end=end);
-    f = open(args.save_dir + 'log.txt', mode);
-    f.write(s + '\n');
+    print(s, end=end)
+    f = open(args.save_dir + 'log.txt', mode)
+    f.write(s + '\n')
     f.close()
