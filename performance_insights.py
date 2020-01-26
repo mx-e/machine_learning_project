@@ -11,7 +11,7 @@ import torch.multiprocessing as mp
 import torch.nn as nn
 sys.path.append('./src')
 from prediction_screening import prediction_screening
-from scatter import scatter
+from scatter2 import scatter
 sys.path.append('./src/modules')
 sys.path.append('./env_model')
 from sokoban_env import SokobanEnv
@@ -53,17 +53,15 @@ class performance_insights:
         model_nxt_state = state
 
         real_nxt_state,reward_real,done,_= env.step(action1) #do step with action
-        #print(real_nxt_state)
+        
         action2 = torch.zeros(1,dtype=torch.long)
         action2[0] = action1
-        #print(action2)
+       
         action3 = action2.squeeze()
-        #print(action3)
+        
         
         model_nxt_state, reward_model = env_module.forward((model_nxt_state, action3)) #self.env_module((model_nxt_state.squeeze(0), action))
-        #print(model_nxt_state)
-        #print('jsia')
-        #model_nxt_state = sigmoid(model_nxt_state)
+        
         model_predictions_norm = model_nxt_state.data
         
         return real_nxt_state, reward_real, model_predictions_norm, reward_model

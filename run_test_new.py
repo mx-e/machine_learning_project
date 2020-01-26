@@ -36,7 +36,7 @@ class run_test:
 
 	real_pic_name1 = "game_state"
 	pred_pic_name1 = "predicted_game_state"
-	path_dict_env_module1 = "/Users/heiko.langer/GIT/machine_learning_project/env_model/envs/sokoban-small-v1/model.2.tar"
+	path_dict_env_module1 = "/Users/heiko.langer/GIT/machine_learning_project/env_model/envs/sokoban-small-v1/production.tar"
 	possible_actions = [0,1,2,3]
 	action = random.choices(possible_actions,k=100)
 	#print(action)
@@ -62,28 +62,15 @@ class run_test:
 	    model_pic_name = "model" + str(counter).zfill(3)  
 	    performance_insights.savepics(model_predictions_norm1, model_pic_name)
 
-	    #img_sidebyside_array = np.concatenate((real_nxt_state1,model_predictions_norm1), axis = 1)
-	    #print(img_sidebyside_array.shape)
-	    #print(img_sidebyside_array)
-
-
-	    #img_sidebyside=Image.fromarray(img_sidebyside_array,'RGB')
-	    #img_sidebyside = img_sidebyside.resize( (800, 400))
-	    #img_sidebyside.save('skks.png', "PNG")
-
-		
-
+	    
 	    state = real_nxt_state1
 
-	#print(reward_array_real)
-	#print(reward_array_model)
+
 
 
 	reward_array_both = np.empty((len(action),1))
-	#print(reward_array_both.ndim)
+
 	reward_array_both = np.vstack((reward_array_real,reward_array_model))#, axis = 1)
-	#print(reward_array_both)
-	#scatter.makescatterplot(reward_array_both,name)
 
 	scatter.makescatterplot(reward_array_real,reward_array_model,name)
 
