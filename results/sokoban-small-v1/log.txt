@@ -1,2 +1,8 @@
 
-time 00h 01m 00s, episodes 2, frames 0.0M, mean epr 8.79, run loss 0.00
+time 00h 01m 04s, episodes 5, frames 0.0M, mean epr -11.13, run loss -2.63, shares of one box (0.97), two boxes (0.00) and three boxes(0.00) pushed on target
+time 00h 02m 10s, episodes 10, frames 0.0M, mean epr -11.17, run loss -5.87, shares of one box (0.93), two boxes (0.00) and three boxes(0.00) pushed on target
+time 00h 03m 10s, episodes 15, frames 0.0M, mean epr -11.20, run loss -8.91, shares of one box (0.90), two boxes (0.00) and three boxes(0.00) pushed on target
+time 00h 04m 10s, episodes 19, frames 0.0M, mean epr -11.24, run loss -11.10, shares of one box (0.86), two boxes (0.00) and three boxes(0.00) pushed on target
+time 00h 05m 15s, episodes 24, frames 0.0M, mean epr -11.28, run loss -13.30, shares of one box (0.82), two boxes (0.00) and three boxes(0.00) pushed on target
+time 00h 06m 15s, episodes 29, frames 0.0M, mean epr -11.29, run loss -16.63, shares of one box (0.81), two boxes (0.00) and three boxes(0.00) pushed on target
+time 00h 07m 26s, episodes 34, frames 0.0M, mean epr -11.31, run loss -19.43, shares of one box (0.78), two boxes (0.01) and three boxes(0.00) pushed on target
