@@ -6,7 +6,7 @@ import numpy as np
 def configure_parser():
     parser = argparse.ArgumentParser(description=None)
     parser.add_argument('--env', default='Sokoban-small-v1', type=str, help='gym environment')
-    parser.add_argument('--processes', default=8, type=int, help='number of processes to train with')
+    parser.add_argument('--processes', default=7, type=int, help='number of processes to train with')
     parser.add_argument('--render', default=False, type=bool, help='renders the atari environment')
     parser.add_argument('--test', default=False, type=bool, help='sets lr=0, chooses most likely actions')
     parser.add_argument('--rnn_steps', default=100, type=int, help='steps to train LSTM over')
