@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 #$ -V
 #$ -cwd
-#$ -binding linear:20
-#$ -l cuda=4
+#$ -binding linear:24
 
 from __future__ import print_function
 import torch, os, gym, time, sys
@@ -38,25 +37,68 @@ discount = lambda x, gamma: lfilter([1], [1, -gamma], x[::-1])[::-1]  # discount
 
 def cost_func(args, values, logps, actions, rewards, copy_policy_logps):
 
-    np_values = values.view(-1).data.numpy()
-
+    #np_values = values.view(-1).data.numpy()
+    #print(values)
+    #print(rewards)
+    values = values.view(-1)
+    #print(values, values.flip(0))
     # generalized advantage estimation using \delta_t residuals (a policy gradient method)
-    delta_t = np.asarray(rewards) + args.gamma * np_values[1:] - np_values[:-1]
+    logpys = logps.gather(1, actions.clone().detach().view(-1, 1))
+    # delta t: difference of reward and value change (from one timestep to another)
+    delta_t = torch.FloatTensor(rewards) - args.gamma * values[1:] - values[:-1]
     # print(actions.clone().detach().view(-1, 1))
     # print(logps)
-    logpys = logps.gather(1, actions.clone().detach().view(-1, 1))
-    gen_adv_est = discount(delta_t, args.gamma * args.tau)
-    policy_loss = -(logpys.view(-1) * torch.FloatTensor(gen_adv_est.copy())).sum()
+    #print(delta_t)
+    #print(discount(delta_t.detach.numpy(), args.gamma * args.tau))
+    gen_adv_est = delta_t
+    #for d in delta_t[::-1]:
+    #    gen_adv_est = d + args.gamma * gen_adv_est
+    gamma_var = args.gamma
+    #print(gamma_var)
+    for counter, delta in enumerate(delta_t):
+
+        gen_adv_est[counter] = gen_adv_est[counter] * gamma_var
+        gamma_var = gamma_var * args.gamma
+
+
+    #print(gen_adv_est)
+
+
+
+    #gen_adv_est = discount(delta_t, args.gamma * args.tau)
+    #print(logpys.view(-1).size(), gen_adv_est.size())
+    policy_loss = -(logpys.view(-1) * gen_adv_est).sum()
 
     # l2 loss over value estimator
-    rewards[-1] += args.gamma * np_values[-1]
+    rewards[-1] += args.gamma * values[-1]
+
     discounted_r = discount(np.asarray(rewards), args.gamma)
+
     discounted_r = torch.tensor(discounted_r.copy(), dtype=torch.float32)
-    value_loss = .5 * (discounted_r - values[:-1, 0]).pow(2).sum()
+
+    value_loss = .5 * (discounted_r - values[:-1]).pow(2).sum()
     cross_entropy_loss = (-copy_policy_logps * torch.exp(logps)).sum()
 
     entropy_loss = (-logps * torch.exp(logps)).sum()  # entropy definition, for entropy regularization
-    return policy_loss + 0.5 * value_loss - 0.01 * entropy_loss - 0.01 * cross_entropy_loss
+
+    #print(logps.grad_fn)
+    #print(values.grad_fn)
+    #print(gen_adv_est.copy().grad_fn)
+
+
+    loss = policy_loss + 0.5 * value_loss - 0.01 * entropy_loss - 0.01 * cross_entropy_loss
+
+    print("\n")
+    print(f"policy_loss: {policy_loss}, value_loss: {value_loss}, entropy_loss: {entropy_loss}, cross_entropy_loss: {cross_entropy_loss}")
+    
+
+    loss_pol_ratio = abs(policy_loss / loss)
+    loss_val_ratio = abs(0.5 * value_loss / loss)
+    loss_entr_ratio = abs(0.01 * entropy_loss / loss)
+    loss_cross_entr_ratio = abs(0.01 * cross_entropy_loss / loss)
+
+    print(f"loss_pol_ratio: {loss_pol_ratio}, loss_val_ratio: {loss_val_ratio}, loss_entr_ratio: {loss_entr_ratio}, loss_cross_entr_ratio: {loss_cross_entr_ratio}")
+    return loss
 
 
 class I2A_PipeLine:
