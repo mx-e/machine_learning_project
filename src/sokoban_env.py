@@ -1,5 +1,5 @@
 import gym
-import gym_sokoban
+import gym_sokoban.envs.sokoban_env as sokoban
 import numpy as np
 import random
 import torch
@@ -8,8 +8,9 @@ import copy
 MODE = 'Sokoban-small-v1'
 ROOM_ENCODING_SIZE = 6
 class SokobanEnv:
-    def __init__(self):
-        self.env = gym.make(MODE)
+    def __init__(self, difficulty = 5):
+        self.difficulty = difficulty
+        self.env = sokoban.SokobanEnv(dim_room = (7,7), max_steps=9*self.difficulty, num_boxes=3, num_gen_steps=difficulty)
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.steps_done = 0
         self.action_space = 4 #reducing action space (push and move in a direction is evaluated), no no-op
@@ -29,9 +30,6 @@ class SokobanEnv:
     def step(self, action):
         self.steps_done += 1
         r, done =  self.eval_step(action)
-        if(self.steps_done > 120):
-            done = True
-            r = -0.1
         return self.get_screen(), r, done, None
 
     def eval_step(self, action):
@@ -53,13 +51,16 @@ class SokobanEnv:
         return (r, done)
 
     def reset(self):
-        self.env.reset()
+        self.env = sokoban.SokobanEnv(dim_room = (7,7), max_steps=min(9*self.difficulty, 120), num_boxes=3, num_gen_steps=self.difficulty)
         self.steps_done = 0
         return self.get_screen()
 
     def close(self):
         self.env.close()
         self.steps_done = 0
+
+    def set_difficulty(self, difficulty):
+        self.difficulty = difficulty
 
     def get_room_state(self):
         return self.room_state

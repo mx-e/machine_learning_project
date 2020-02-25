@@ -25,6 +25,7 @@ from environment_module import Env_Module
 from rollout_unit import RolloutUnit
 from utils import configure_parser, save_modules, load_modules, update_shared_info, update_log, printlog
 from policy_output_module import Policy_Output_Module
+from torch.autograd import Variable
 
 os.environ['OMP_NUM_THREADS'] = '1'
 
@@ -34,29 +35,28 @@ def get_args():
     return parser.parse_args()
 
 
-discount = lambda x, gamma: lfilter([1], [1, -gamma], x[::-1])[::-1]  # discounted rewards one liner
-
 def cost_func(args, values, logps, actions, rewards, copy_policy_logps):
+    R = torch.zeros(1,1)
+    R = Variable(R)
+    policy_loss = 0
+    value_loss = 0
+    gae = torch.zeros(1, 1)
+    for i in reversed(range(len(rewards))):
+        R = args.gamma * R + rewards[i]
+        advantage = R - values[i]
+        value_loss += 0.5 * advantage.pow(2)
 
-    np_values = values.view(-1).data.numpy()
-
-    # generalized advantage estimation using \delta_t residuals (a policy gradient method)
-    delta_t = np.asarray(rewards) + args.gamma * np_values[1:] - np_values[:-1]
-    # print(actions.clone().detach().view(-1, 1))
-    # print(logps)
-    logpys = logps.gather(1, actions.clone().detach().view(-1, 1))
-    gen_adv_est = discount(delta_t, args.gamma * args.tau)
-    policy_loss = -(logpys.view(-1) * torch.FloatTensor(gen_adv_est.copy())).sum()
-
-    # l2 loss over value estimator
-    rewards[-1] += args.gamma * np_values[-1]
-    discounted_r = discount(np.asarray(rewards), args.gamma)
-    discounted_r = torch.tensor(discounted_r.copy(), dtype=torch.float32)
-    value_loss = .5 * (discounted_r - values[:-1, 0]).pow(2).sum()
+        # Generalized Advantage Estimataion
+        delta_t = rewards[i] + args.gamma * values[i + 1] - values[i]
+        gae = gae * args.gamma * args.tau + delta_t
+        policy_loss -= logps[i][actions[i]] * Variable(gae)
+    #printlog(args, f"VALUES {values} REWARDS {rewards} ACTIONS {actions} LOGPS {logps}")
+    #printlog(args, f"LOGPYS {logpys}  DELTA_T{delta_t}")
+    #printlog(args, f"DISC_R {discounted_r}")
+    #printlog(args, f"POLICY {policy_loss} VALUE {value_loss} EPR {rewards.sum()}")
     cross_entropy_loss = (-copy_policy_logps * torch.exp(logps)).sum()
-
     entropy_loss = (-logps * torch.exp(logps)).sum()  # entropy definition, for entropy regularization
-    return policy_loss + 0.5 * value_loss - 0.01 * entropy_loss - 0.01 * cross_entropy_loss
+    return policy_loss + value_loss - 0.01 * entropy_loss - 0.01 * cross_entropy_loss
 
 
 class I2A_PipeLine:
@@ -89,7 +89,7 @@ def train(shared_modules, shared_optim, rank, args, info):
         print(f"Worker {rank} on GPU No. {rank%args.cuda_count} ({torch.cuda.get_device_name(rank%args.cuda_count)}, {torch.cuda.get_device_capability(rank%args.cuda_count)}) ")
     else:
         print(f"Worker {rank} on CPU")
-    env = SokobanEnv()  # make a local (unshared) environment
+    env = SokobanEnv(args.starting_difficulty)  # make a local (unshared) environment
     env.seed()
     torch.manual_seed(args.seed + rank)  # seed everything
     env_module = Env_Module(input_size=args.input_size, num_actions=args.num_actions)#.to(gpu if args.cuda else cpu)
@@ -147,16 +147,17 @@ def train(shared_modules, shared_optim, rank, args, info):
                 update_log(args, info, num_frames, start_time)
                 last_disp_time = time.time()
 
-            if done:  # maybe print info.
-                episode_length, epr, eploss, no_boxes = 0, 0, 0, 0
-                state = env.reset()
-                break
-
             values.append(value)
             logps.append(logp)
             actions.append(action)
             rewards.append(reward)
             copy_policy_logps.append(copy_policy_logp)
+
+            if done:  # maybe print info.
+                episode_length, epr, eploss, no_boxes = 0, 0, 0, 0
+                env.set_difficulty(int(info['difficulty'].item()))
+                state = env.reset()
+                break
 
         next_value = torch.zeros(1, 1) if done else model_pipeline.pipe(state.unsqueeze(0))[1]
         values.append(next_value.detach())
@@ -218,7 +219,8 @@ if __name__ == "__main__":
 
     shared_optim = SharedAdam(parameters, lr=args.lr)
 
-    info = {k: torch.DoubleTensor([0]).share_memory_() for k in ['run_epr', 'run_loss', 'episodes', 'frames', 'one_box', 'two_boxes', 'three_boxes']}
+    info = {k: torch.DoubleTensor([0]).share_memory_() for k in ['run_epr', 'run_loss', 'episodes', 'frames', 'one_box', 'two_boxes', 'three_boxes', 'difficulty']}
+    info['difficulty'] += int(args.starting_difficulty)
     info['frames'] += int(load_modules(shared_modules, args.save_dir) * 1e6)
     if int(info['frames'].item()) == 0: printlog(args, '', end='', mode='w')  # clear log file
 

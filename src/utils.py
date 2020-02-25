@@ -6,7 +6,7 @@ import numpy as np
 def configure_parser():
     parser = argparse.ArgumentParser(description=None)
     parser.add_argument('--env', default='Sokoban-small-v1', type=str, help='gym environment')
-    parser.add_argument('--processes', default=1, type=int, help='number of processes to train with')
+    parser.add_argument('--processes', default=8, type=int, help='number of processes to train with')
     parser.add_argument('--render', default=False, type=bool, help='renders the atari environment')
     parser.add_argument('--test', default=False, type=bool, help='sets lr=0, chooses most likely actions')
     parser.add_argument('--rnn_steps', default=100, type=int, help='steps to train LSTM over')
@@ -20,6 +20,7 @@ def configure_parser():
     parser.add_argument('--n_rollouts', default=4, type=int, help='no. of parallel rollouts')
     parser.add_argument('--rollout_depth', default=3, type=int, help='depth of rollouts')
     parser.add_argument('--max_on_cuda', default=20, type=int, help='depth of rollouts')
+    parser.add_argument('--starting_difficulty', default=4, type=int, help='depth of rollouts')
     return parser
 
 
@@ -81,14 +82,18 @@ def update_shared_info(args, eploss, epr, info, no_boxes):
     info['one_box'].mul_(1 - interp).add_(interp * one_box)
     info['two_boxes'].mul_(1 - interp).add_(interp * two_boxes)
     info['three_boxes'].mul_(1 - interp).add_(interp * three_boxes)
+    if(info['three_boxes'].item() > 0.80 and info['difficulty'].item() < 25 and info['episodes'].item() > 600):
+        info['difficulty'].add_(1)
+    if(info['three_boxes'].item() < 0.65 and info['difficulty'] > 4):
+        info['difficulty'].sub_(1)
 
 def update_log(args, info, num_frames, start_time):
     elapsed = time.strftime("%Hh %Mm %Ss", time.gmtime(time.time() - start_time))
     printlog(args,
-             'time {}, episodes {:.0f}, frames {:.1f}M, mean epr {:.2f}, run loss {:.2f}, shares of one box ({:.2f}), two boxes ({:.2f}) and three boxes({:.2f}) pushed on target'
+             'time {}, episodes {:.0f}, frames {:.1f}M, mean epr {:.2f}, run loss {:.2f}, shares of one box ({:.2f}), two boxes ({:.2f}) and three boxes({:.2f}) pushed on target, difficulty: {}'
              .format(elapsed, info['episodes'].item(), num_frames / 1e6,
                      info['run_epr'].item(), info['run_loss'].item(), info['one_box'].item(), info['two_boxes'].item(),
-                     info['three_boxes'].item()))
+                     info['three_boxes'].item(), info['difficulty'].item()))
 
 def printlog(args, s, end='\n', mode='a'):
     print(s, end=end);
