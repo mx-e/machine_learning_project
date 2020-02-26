@@ -16,22 +16,22 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.multiprocessing as mp
 import gym_sokoban
+from src.sokoban_env import SokobanEnv
 
 os.environ['OMP_NUM_THREADS'] = '1'
 
 
 def get_args():
     parser = argparse.ArgumentParser(description=None)
-    parser.add_argument('--env', default='MsPacman-v0', type=str, help='gym environment')
-    parser.add_argument('--processes', default=40, type=int, help='number of processes to train with')
+    parser.add_argument('--env', default='Sokoban', type=str, help='gym environment')
+    parser.add_argument('--processes', default=12, type=int, help='number of processes to train with')
     parser.add_argument('--render', default=False, type=bool, help='renders the atari environment')
     parser.add_argument('--test', default=False, type=bool, help='sets lr=0, chooses most likely actions')
-    parser.add_argument('--rnn_steps', default=20, type=int, help='steps to train LSTM over')
     parser.add_argument('--lr', default=1e-4, type=float, help='learning rate')
     parser.add_argument('--seed', default=1, type=int, help='seed random # generators (for reproducibility)')
     parser.add_argument('--gamma', default=0.99, type=float, help='rewards discount factor')
     parser.add_argument('--tau', default=1.0, type=float, help='generalized advantage estimation discount')
-    parser.add_argument('--horizon', default=0.99, type=float, help='horizon for running averages')
+    parser.add_argument('--horizon', default=0.999, type=float, help='horizon for running averages')
     parser.add_argument('--hidden', default=256, type=int, help='hidden size of GRU')
     return parser.parse_args()
 
@@ -50,11 +50,15 @@ def printlog(args, s, end='\n', mode='a'):
 class NNPolicy(nn.Module):  # an actor-critic neural network
     def __init__(self, channels, memsize, num_actions):
         super(NNPolicy, self).__init__()
-        self.conv1 = nn.Conv2d(channels, 32, 3, stride=2, padding=1)
-        self.conv2 = nn.Conv2d(32, 32, 3, stride=2, padding=1)
-        self.conv3 = nn.Conv2d(32, 32, 3, stride=2, padding=1)
-        self.conv4 = nn.Conv2d(32, 32, 3, stride=2, padding=1)
-        self.gru = nn.GRUCell(32 * 5 * 5, memsize)
+        self.conv1 = nn.Conv2d(channels, 64, 3, stride=1, padding=1)
+        self.conv2 = nn.Conv2d(64, 64, 3, stride=1, padding=1)
+        self.conv3 = nn.Conv2d(64, 64, 3, stride=2, padding=1)
+        self.conv4 = nn.Conv2d(64, 64, 3, stride=1, padding=1)
+        self.conv5 = nn.Conv2d(64, 64, 3, stride=1, padding=1)
+        self.conv6 = nn.Conv2d(64, 64, 3, stride=1, padding=1)
+        self.conv7 = nn.Conv2d(64, 64, 3, stride=1, padding=1)
+        self.conv8 = nn.Conv2d(64, 64, 3, stride=1, padding=1)
+        self.gru = nn.GRUCell(1024, memsize)
         self.critic_linear, self.actor_linear = nn.Linear(memsize, 1), nn.Linear(memsize, num_actions)
 
     def forward(self, inputs, train=True, hard=False):
@@ -63,7 +67,11 @@ class NNPolicy(nn.Module):  # an actor-critic neural network
         x = F.elu(self.conv2(x))
         x = F.elu(self.conv3(x))
         x = F.elu(self.conv4(x))
-        hx = self.gru(x.view(-1, 32 * 5 * 5), (hx))
+        x = F.elu(self.conv5(x))
+        x = F.elu(self.conv6(x))
+        x = F.elu(self.conv7(x))
+        x = F.elu(self.conv8(x))
+        hx = self.gru(x.view(-1, 1024), (hx))
         return self.critic_linear(hx), self.actor_linear(hx), hx
 
     def try_load(self, save_dir):
@@ -102,7 +110,7 @@ def cost_func(args, values, logps, actions, rewards):
 
     # generalized advantage estimation using \delta_t residuals (a policy gradient method)
     delta_t = np.asarray(rewards) + args.gamma * np_values[1:] - np_values[:-1]
-    logpys = logps.gather(1, actions.clone().detach().view(-1, 1))
+    logpys = logps.gather(1, actions.clone().view(-1, 1))
     gen_adv_est = discount(delta_t, args.gamma * args.tau)
     policy_loss = -(logpys.view(-1) * torch.FloatTensor(gen_adv_est.copy())).sum()
 
@@ -117,11 +125,12 @@ def cost_func(args, values, logps, actions, rewards):
 
 
 def train(shared_model, shared_optimizer, rank, args, info):
-    env = gym.make(args.env)  # make a local (unshared) environment
+    env = SokobanEnv() # make a local (unshared) environment
+    env.set_difficulty(int(info['difficulty'].item()))
     env.seed(args.seed + rank);
     torch.manual_seed(args.seed + rank)  # seed everything
-    model = NNPolicy(channels=1, memsize=args.hidden, num_actions=args.num_actions)  # a local/unshared model
-    state = torch.tensor(prepro(env.reset()))  # get first state
+    model = NNPolicy(channels=3, memsize=args.hidden, num_actions=args.num_actions)  # a local/unshared model
+    state = env.get_screen().unsqueeze(0)  # get first state
 
     start_time = last_disp_time = time.time()
     episode_length, epr, eploss, done = 0, 0, 0, True  # bookkeeping
@@ -131,19 +140,23 @@ def train(shared_model, shared_optimizer, rank, args, info):
 
         hx = torch.zeros(1, 256) if done else hx.detach()  # rnn activation vector
         values, logps, actions, rewards = [], [], [], []  # save values for computing gradientss
+        no_boxes = 0
 
-        for step in range(args.rnn_steps):
+        while(True):
             episode_length += 1
-            value, logit, hx = model((state.view(1, 1, 80, 80), hx))
+            value, logit, hx = model((env.get_screen().unsqueeze(0), hx))
             logp = F.log_softmax(logit, dim=-1)
 
             action = torch.exp(logp).multinomial(num_samples=1).data[0]  # logp.max(1)[1].data if args.test else
             state, reward, done, _ = env.step(action.numpy()[0])
             if args.render: env.render()
+            if reward >= 0.9:
+                no_boxes+=1
+            if reward <= -0.9:
+                no_boxes-=1
 
-            state = torch.tensor(prepro(state));
+            state = env.get_screen().unsqueeze(0);
             epr += reward
-            reward = np.clip(reward, -1, 1)  # reward
             done = done or episode_length >= 1e4  # don't playing one ep for too long
 
             info['frames'].add_(1);
@@ -153,26 +166,43 @@ def train(shared_model, shared_optimizer, rank, args, info):
                 torch.save(shared_model.state_dict(), args.save_dir + 'model.{:.0f}.tar'.format(num_frames / 1e6))
 
             if done:  # update shared data
+                one_box, two_boxes, three_boxes = 0, 0, 0
                 info['episodes'] += 1
                 interp = 1 if info['episodes'][0] == 1 else 1 - args.horizon
                 info['run_epr'].mul_(1 - interp).add_(interp * epr)
                 info['run_loss'].mul_(1 - interp).add_(interp * eploss)
+                if no_boxes >= 1:
+                    one_box = 1
+                if no_boxes >= 2:
+                    two_boxes = 1
+                if no_boxes >= 3:
+                    three_boxes = 1
+                info['one_box'].mul_(1 - interp).add_(interp * one_box)
+                info['two_boxes'].mul_(1 - interp).add_(interp * two_boxes)
+                info['three_boxes'].mul_(1 - interp).add_(interp * three_boxes)
+                if(info['three_boxes'].item() > 0.80 and info['difficulty'].item() < 25 and info['episodes'].item() > 3000):
+                    info['difficulty'].add_(1)
 
             if rank == 0 and time.time() - last_disp_time > 60:  # print info ~ every minute
                 elapsed = time.strftime("%Hh %Mm %Ss", time.gmtime(time.time() - start_time))
-                printlog(args, 'time {}, episodes {:.0f}, frames {:.1f}M, mean epr {:.2f}, run loss {:.2f}'
-                         .format(elapsed, info['episodes'].item(), num_frames / 1e6,
-                                 info['run_epr'].item(), info['run_loss'].item()))
+                printlog(args, 'time {}, episodes {:.0f}, frames {:.1f}M, mean epr {:.2f}, run loss {:.2f}, shares of one box ({:.2f}), two boxes ({:.2f}) and three boxes({:.2f}) pushed on target, difficulty: {}'
+                    .format(elapsed, info['episodes'].item(), num_frames / 1e6,
+                    info['run_epr'].item(), info['run_loss'].item(), info['one_box'].item(), info['two_boxes'].item(),
+                    info['three_boxes'].item(), info['difficulty'].item()))
                 last_disp_time = time.time()
-
-            if done:  # maybe print info.
-                episode_length, epr, eploss = 0, 0, 0
-                state = torch.tensor(prepro(env.reset()))
-
+            
             values.append(value);
             logps.append(logp);
             actions.append(action);
             rewards.append(reward)
+
+            if done:  # maybe print info.
+                episode_length, epr, eploss = 0, 0, 0
+                env.set_difficulty(int(info['difficulty']))
+                state = env.reset().unsqueeze(0)
+                break;
+
+            
 
         next_value = torch.zeros(1, 1) if done else model((state.unsqueeze(0), hx))[0]
         values.append(next_value.detach())
@@ -198,14 +228,15 @@ if __name__ == "__main__":
     args.save_dir = '{}/'.format(args.env.lower())  # keep the directory structure simple
     if args.render:  args.processes = 1; args.test = True  # render mode -> test mode w one process
     if args.test:  args.lr = 0  # don't train in render mode
-    args.num_actions = gym.make(args.env).action_space.n  # get the action space of this game
+    args.num_actions = SokobanEnv().action_space # get the action space of this game
     os.makedirs(args.save_dir) if not os.path.exists(args.save_dir) else None  # make dir to save models etc.
 
     torch.manual_seed(args.seed)
-    shared_model = NNPolicy(channels=1, memsize=args.hidden, num_actions=args.num_actions).share_memory()
+    shared_model = NNPolicy(channels=3, memsize=args.hidden, num_actions=args.num_actions).share_memory()
     shared_optimizer = SharedAdam(shared_model.parameters(), lr=args.lr)
 
-    info = {k: torch.DoubleTensor([0]).share_memory_() for k in ['run_epr', 'run_loss', 'episodes', 'frames']}
+    info = {k: torch.DoubleTensor([0]).share_memory_() for k in ['run_epr', 'run_loss', 'episodes', 'frames', 'one_box', 'two_boxes', 'three_boxes', 'difficulty']}
+    info['difficulty'].add_(4.)
     info['frames'] += shared_model.try_load(args.save_dir) * 1e6
     if int(info['frames'].item()) == 0: printlog(args, '', end='', mode='w')  # clear log file
 
