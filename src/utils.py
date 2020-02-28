@@ -6,7 +6,7 @@ import numpy as np
 def configure_parser():
     parser = argparse.ArgumentParser(description=None)
     parser.add_argument('--env', default='Sokoban-small-v1', type=str, help='gym environment')
-    parser.add_argument('--processes', default=8, type=int, help='number of processes to train with')
+    parser.add_argument('--processes', default=32, type=int, help='number of processes to train with')
     parser.add_argument('--render', default=False, type=bool, help='renders the atari environment')
     parser.add_argument('--test', default=False, type=bool, help='sets lr=0, chooses most likely actions')
     parser.add_argument('--rnn_steps', default=100, type=int, help='steps to train LSTM over')
@@ -19,7 +19,7 @@ def configure_parser():
     parser.add_argument('--save_dir', default='results', type=str, help='relative directory, in which to save models and data')
     parser.add_argument('--n_rollouts', default=4, type=int, help='no. of parallel rollouts')
     parser.add_argument('--rollout_depth', default=3, type=int, help='depth of rollouts')
-    parser.add_argument('--max_on_cuda', default=20, type=int, help='depth of rollouts')
+    parser.add_argument('--max_on_cuda', default=0, type=int, help='depth of rollouts')
     parser.add_argument('--starting_difficulty', default=4, type=int, help='depth of rollouts')
     return parser
 
