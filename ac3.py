@@ -24,7 +24,7 @@ os.environ['OMP_NUM_THREADS'] = '1'
 def get_args():
     parser = argparse.ArgumentParser(description=None)
     parser.add_argument('--env', default='Sokoban', type=str, help='gym environment')
-    parser.add_argument('--processes', default=12, type=int, help='number of processes to train with')
+    parser.add_argument('--processes', default=8, type=int, help='number of processes to train with')
     parser.add_argument('--render', default=False, type=bool, help='renders the atari environment')
     parser.add_argument('--test', default=False, type=bool, help='sets lr=0, chooses most likely actions')
     parser.add_argument('--lr', default=1e-4, type=float, help='learning rate')
@@ -33,6 +33,8 @@ def get_args():
     parser.add_argument('--tau', default=1.0, type=float, help='generalized advantage estimation discount')
     parser.add_argument('--horizon', default=0.999, type=float, help='horizon for running averages')
     parser.add_argument('--hidden', default=256, type=int, help='hidden size of GRU')
+    parser.add_argument('--starting_difficulty', default=7, type=int, help='hidden size of GRU')
+
     return parser.parse_args()
 
 
@@ -182,6 +184,7 @@ def train(shared_model, shared_optimizer, rank, args, info):
                 info['three_boxes'].mul_(1 - interp).add_(interp * three_boxes)
                 if(info['three_boxes'].item() > 0.80 and info['difficulty'].item() < 25 and info['episodes'].item() > 3000):
                     info['difficulty'].add_(1)
+                    info['three_boxes'].mul_(0)
 
             if rank == 0 and time.time() - last_disp_time > 60:  # print info ~ every minute
                 elapsed = time.strftime("%Hh %Mm %Ss", time.gmtime(time.time() - start_time))
@@ -236,7 +239,7 @@ if __name__ == "__main__":
     shared_optimizer = SharedAdam(shared_model.parameters(), lr=args.lr)
 
     info = {k: torch.DoubleTensor([0]).share_memory_() for k in ['run_epr', 'run_loss', 'episodes', 'frames', 'one_box', 'two_boxes', 'three_boxes', 'difficulty']}
-    info['difficulty'].add_(4.)
+    info['difficulty'].add_(args.starting_difficulty)
     info['frames'] += shared_model.try_load(args.save_dir) * 1e6
     if int(info['frames'].item()) == 0: printlog(args, '', end='', mode='w')  # clear log file
 
