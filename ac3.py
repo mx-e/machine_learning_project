@@ -13,7 +13,7 @@ import torch.nn.functional as F
 import torch.multiprocessing as mp
 import gym_sokoban
 sys.path.append('./src')
-from .sokoban_env import SokobanEnv
+from sokoban_env import SokobanEnv
 
 os.environ['OMP_NUM_THREADS'] = '1'
 
