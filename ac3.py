@@ -3,10 +3,6 @@
 #$ -cwd
 #$ -pe OpenMP 20
 
-
-
-# Baby Advantage Actor-Critic | Sam Greydanus | October 2017 | MIT License
-
 from __future__ import print_function
 import torch, os, gym, time, glob, argparse, sys
 import numpy as np
@@ -16,7 +12,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.multiprocessing as mp
 import gym_sokoban
-from src.sokoban_env import SokobanEnv
+sys.path.append('./src')
+from sokoban_env import SokobanEnv
 
 os.environ['OMP_NUM_THREADS'] = '1'
 
@@ -24,7 +21,7 @@ os.environ['OMP_NUM_THREADS'] = '1'
 def get_args():
     parser = argparse.ArgumentParser(description=None)
     parser.add_argument('--env', default='Sokoban', type=str, help='gym environment')
-    parser.add_argument('--processes', default=8, type=int, help='number of processes to train with')
+    parser.add_argument('--processes', default=32, type=int, help='number of processes to train with')
     parser.add_argument('--render', default=False, type=bool, help='renders the atari environment')
     parser.add_argument('--test', default=False, type=bool, help='sets lr=0, chooses most likely actions')
     parser.add_argument('--lr', default=1e-4, type=float, help='learning rate')
@@ -33,7 +30,7 @@ def get_args():
     parser.add_argument('--tau', default=1.0, type=float, help='generalized advantage estimation discount')
     parser.add_argument('--horizon', default=0.999, type=float, help='horizon for running averages')
     parser.add_argument('--hidden', default=256, type=int, help='hidden size of GRU')
-    parser.add_argument('--starting_difficulty', default=7, type=int, help='hidden size of GRU')
+    parser.add_argument('--starting_difficulty', default=4, type=int, help='hidden size of GRU')
 
     return parser.parse_args()
 
