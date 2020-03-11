@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 #$ -V
 #$ -cwd
-#$ -binding linear:20
-#$ -l cuda=4
+#$ -pe OpenMP 20
 
 from __future__ import print_function
 import torch, os, gym, time, sys

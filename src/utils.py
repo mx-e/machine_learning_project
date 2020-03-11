@@ -82,10 +82,11 @@ def update_shared_info(args, eploss, epr, info, no_boxes):
     info['one_box'].mul_(1 - interp).add_(interp * one_box)
     info['two_boxes'].mul_(1 - interp).add_(interp * two_boxes)
     info['three_boxes'].mul_(1 - interp).add_(interp * three_boxes)
-    if(info['three_boxes'].item() > 0.80 and info['difficulty'].item() < 25 and info['episodes'].item() > 600):
+    if(info['three_boxes'].item() > 0.80 and info['difficulty'].item() < 25 and info['episodes'].item() > 2000):
         info['difficulty'].add_(1)
-    if(info['three_boxes'].item() < 0.65 and info['difficulty'] > 4):
-        info['difficulty'].sub_(1)
+        info['three_boxes'].mul_(0)
+
+    
 
 def update_log(args, info, num_frames, start_time):
     elapsed = time.strftime("%Hh %Mm %Ss", time.gmtime(time.time() - start_time))
